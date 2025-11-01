@@ -10,11 +10,17 @@ import asyncio
 class Polygon:
     def __init__(self, name, center_x, center_y, offsets, color=(255, 255, 255)):
         self.name = name
-        self.center_x = center_x
-        self.center_y = center_y
+        self._start_center_x = center_x
+        self._start_center_y = center_y
+
+        self.center_x = self._start_center_x
+        self.center_y = self._start_center_y
+
         assert sum([offset[0] for offset in offsets]) == 0 == sum([offset[1] for offset in offsets])
         self.true_offsets = offsets
-        self.angle = 0
+        self.start_angle = 0
+
+        self.angle = self.start_angle
         self.color = color
 
     def _rotate_point(self, point):
@@ -25,6 +31,10 @@ class Polygon:
     @property
     def offsets(self):
         return [self._rotate_point(offset) for offset in self.true_offsets]
+
+    @property
+    def start_center(self):
+        return self._start_center_x, self._start_center_y
 
     @property
     def points(self):
