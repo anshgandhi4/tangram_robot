@@ -6,6 +6,7 @@ from PIL import Image
 import threading
 import base64
 import asyncio
+import json
 
 class Polygon:
     def __init__(self, name, center_x, center_y, offsets, color=(255, 255, 255)):
@@ -76,6 +77,9 @@ class WindowManager:
         print(f"Warning: Polygon {name} not found for rotation.")
         return False
 
+    def get_all_points(self):
+        return {polygon.name: [{"x": pt[0], "y": pt[1]} for pt in polygon.points] for polygon in self.polygons}
+
 
 # --- Initialization ---
 pygame.init()
@@ -84,9 +88,10 @@ clock = pygame.time.Clock()
 window_manager = WindowManager(window)
 
 sq = Polygon("sq", 180, 180, ((-40, -40), (40, -40), (40, 40), (-40, 40)))
-par = Polygon("par", 30, 60, ((-40, -20), (-20, 20), (40, 20), (20, -20)))
+
+trap = Polygon("trap", 100, 60, ((-40, -10), (40, -10), (60, 10), (-60, 10)))
 window_manager.add_polygon(sq)
-window_manager.add_polygon(par)
+window_manager.add_polygon(trap)
 
 _run_pygame = True
 
@@ -136,6 +141,11 @@ async def get_observation() -> str:
     base64_data = base64.b64encode(buf.getvalue()).decode('utf-8')
     return f"data:image/png;base64,{base64_data}"
 
+@mcp.tool()
+async def get_observation_points() -> str:
+    """Return the coordinates of all points of all polygons in the window """
+    await asyncio.sleep(1)
+    return json.dumps(window_manager.get_all_points())
 
 def start_mcp_server():
     """Runs the FastMCP server in this function."""
