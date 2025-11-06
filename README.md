@@ -28,18 +28,18 @@ ros2 run ur7e_utils enable_comms
 cd ~/ros2_ws
 colcon build --symlink-install
 source install/setup.bash
-ros2 launch planning lab7_bringup.launch.py ar_marker:=ar_marker_<marker id>
+ros2 launch tangram_robot tangram.launch.py ar_marker:=ar_marker_<marker id>
 ```
 
 ```bash
 cd ~/ros2_ws
 source install/setup.bash
-ros2 run planning main
+ros2 run tangram_robot main
 ```
 
 ## packages
 
 * `perception`: filter pointcloud
-* `planning`: determine cube pose, unify TF tree, run IK, full pick and place pipeline
+* `planning`: determine cube pose, unify TF tree, run IK
 * `ros2_aruco`: determine camera pose relative to aruco marker
-* `tangram_robot`: nothing for now
+* `tangram_robot`: full pick and place pipeline

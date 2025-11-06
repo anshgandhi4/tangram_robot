@@ -4,19 +4,14 @@ import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from control_msgs.action import FollowJointTrajectory
-from geometry_msgs.msg import PointStamped 
-from moveit_msgs.msg import RobotTrajectory
-from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+from geometry_msgs.msg import PointStamped
 from sensor_msgs.msg import JointState
-from tf2_ros import Buffer, TransformListener
-from scipy.spatial.transform import Rotation as R
-import numpy as np
 
 from planning.ik import IKPlanner
 
-class UR7e_CubeGrasp(Node):
+class PickAndPlace(Node):
     def __init__(self):
-        super().__init__('cube_grasp')
+        super().__init__('pick_place')
 
         self.cube_sub = self.create_subscription(PointStamped, '/transformed_cube_pose', self.cube_callback, 1)
         self.joint_state_sub = self.create_subscription(JointState, '/joint_states', self.joint_state_callback, 1)
@@ -33,7 +28,8 @@ class UR7e_CubeGrasp(Node):
 
         self.ik_planner = IKPlanner()
 
-        self.job_queue = [] # Entries should be of type either JointState or String('toggle_grip')
+        # Entries should be of type either JointState or String('toggle_grip')
+        self.job_queue = []
 
     def joint_state_callback(self, msg: JointState):
         self.joint_state = msg
@@ -161,7 +157,7 @@ class UR7e_CubeGrasp(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = UR7e_CubeGrasp()
+    node = PickAndPlace()
     rclpy.spin(node)
     node.destroy_node()
 

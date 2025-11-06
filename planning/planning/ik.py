@@ -1,32 +1,11 @@
 import rclpy
 from rclpy.node import Node
 from moveit_msgs.srv import GetPositionIK, GetMotionPlan
-from moveit_msgs.msg import PositionIKRequest, Constraints, JointConstraint
+from moveit_msgs.msg import Constraints, JointConstraint
 from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import JointState
 from builtin_interfaces.msg import Duration
 import sys
-
-
-# Example usage:
-# -------------------------------------------------
-# current joint state (replace with your robot's)
-# current_state = JointState()
-# current_state.name = [
-#     'shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
-#     'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint'
-# ]
-# current_state.position = [0.0, -1.57, 1.57, 0.0, 0.0, 0.0]
-
-# Compute IK for target point
-# ik_solution = node.compute_ik(current_state, 0.4, 0.1, 0.3)
-
-# if ik_solution:
-#     # Plan motion to the found joint configuration
-#     trajectory = node.plan_to_joints(ik_solution)
-#     if trajectory:
-#         node.get_logger().info('Trajectory ready to execute.')
-
 
 class IKPlanner(Node):
     def __init__(self):
@@ -44,7 +23,7 @@ class IKPlanner(Node):
     # -----------------------------------------------------------
     # Compute IK for a given (x, y, z) + quat and current robot joint state
     # -----------------------------------------------------------
-    def compute_ik(self, current_joint_state, x, y, z, qx=0.0, qy=1.0, qz=0.0, qw=0.0): # Think about why the default quaternion is like this. Why is qy=1?
+    def compute_ik(self, current_joint_state, x, y, z, qx=0.0, qy=1.0, qz=0.0, qw=0.0):
         pose = PoseStamped()
         pose.header.frame_id = 'base_link'
         pose.pose.position.x = x
@@ -122,18 +101,7 @@ def main(args=None):
 
     # ---------- Test setup ----------
     current_state = JointState()
-    current_state.name = [
-        'shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
-        'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint'
-    ]
-
-    # 4.722274303436279
-    # -1.8504554233946742
-    # -1.4257320165634155
-    # -1.4052301210216065
-    # 1.5935229063034058
-    # -3.14103871980776
-
+    current_state.name = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint','wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
     current_state.position = [4.722, -1.850, -1.425, -1.405, 1.593, -3.141]
 
     # ---------- Run IK ----------
