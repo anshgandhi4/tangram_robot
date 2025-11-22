@@ -1,0 +1,6 @@
+beautifulsoup4
+cloudscraper
+numpy
+opencv-python
+Pillow
+tqdm
