@@ -7,22 +7,11 @@ This scraper:
 3. Visits each solution page and downloads the solution image
 """
 
+from bs4 import BeautifulSoup
+import cloudscraper
 import os
 import time
 from urllib.parse import urljoin, urlparse
-
-try:
-    import cloudscraper
-    CLOUDSCRAPER_AVAILABLE = True
-except ImportError:
-    CLOUDSCRAPER_AVAILABLE = False
-    print("cloudscraper not installed. Installing...")
-    import subprocess
-    subprocess.check_call(['pip', 'install', 'cloudscraper'])
-    import cloudscraper
-    CLOUDSCRAPER_AVAILABLE = True
-
-from bs4 import BeautifulSoup
 
 # Configuration
 CATEGORY_URLS = [
@@ -34,7 +23,7 @@ CATEGORY_URLS = [
     "https://www.tangram-channel.com/tangram-solutions/boats/",
     "https://www.tangram-channel.com/tangram-solutions/miscellaneous/",
 ]
-OUTPUT_DIR = "tangram-imgs"
+OUTPUT_DIR = "tangrams"
 
 def create_output_directory():
     """Create the output directory if it doesn't exist"""
