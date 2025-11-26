@@ -14,11 +14,11 @@ def extract_corners_from_image(image_path):
     # read image, use PIL to avoid libpng warnings
     img = cv2.cvtColor(np.array(Image.open(image_path)), cv2.COLOR_BGR2HSV)
 
-    # get count of all colors present in image
-    color_counter = Counter([tuple(col) for row in img for col in row])
+    # get count of all non-gray colors present in image
+    color_counter = Counter([tuple(pixel) for row in img for pixel in row if pixel[1] != 0])
 
-    # get top NUM_COLORS most common non-gray colors
-    colors = [np.array(color) for color, _ in color_counter.most_common(NUM_COLORS) if color[1] != 0]
+    # get top NUM_COLORS most common colors
+    colors = [np.array(color) for color, _ in color_counter.most_common(NUM_COLORS)]
 
     # get corners for tangram shape corresponding to each color
     tangram = Tangram()
@@ -34,6 +34,7 @@ def extract_corners_from_image(image_path):
         contour = None
         for c in contours:
             # TODO: remove duplicate points
+            c = cv2.convexHull(c)
             if len(c) not in [3, 4]:
                 # print(len(c))
                 # breakpoint()
@@ -45,6 +46,7 @@ def extract_corners_from_image(image_path):
         if contour is None:
             continue
 
+        # TODO: is this step necessary if convex hull is being done?
         # approximate polygon based on contour
         # epsilon is max distance between contour and approximate polygon, larger epsilon results in more simplified polygon
         epsilon = 0.02 * cv2.arcLength(contour, True)
