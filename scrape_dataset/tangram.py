@@ -2,35 +2,35 @@ import numpy as np
 
 class Piece:
     def __init__(self, coords, color):
-        # TODO: debug this part
-        if len(coords) not in [3, 4]:
-            print('something is wrong')
-            breakpoint()
-            return
-
         self.coords = coords
         self.color = color
         self.shape = self.classify_shape()
         self.area = self.calculate_area()
         self.pose = None
 
+    def __str__(self):
+        return f'Piece(coords={self.coords}, color={self.color}, shape={self.shape}, area={self.area}, pose={self.pose})'
+
+    def __repr__(self):
+        return self.__str__()
+
     def classify_shape(self):
         if len(self.coords) == 3:
             return 'triangle'
 
-        if np.dot(self.coords[0] - self.coords[1], self.coords[1] - self.coords[2]) == 0:
+        if abs(np.linalg.norm(self.coords[0] - self.coords[1]) - np.linalg.norm(self.coords[1] - self.coords[2])) < 1:
             return 'square'
 
         return 'parallelogram'
 
     def calculate_area(self):
         if 'triangle' in self.shape:
-            return 0.5 * np.linalg.det(np.hstack([self.coords, np.ones((3, 1))]))
+            return int(0.5 * np.linalg.det(np.hstack([self.coords, np.ones((3, 1))])))
 
         if self.shape == 'square':
-            return np.linalg.norm(self.coords[0] - self.coords[1]) ** 2
+            return int(np.linalg.norm(self.coords[0] - self.coords[1]) ** 2)
 
-        return np.linalg.det(np.hstack([self.coords[:-1], np.ones((3, 1))]))
+        return int(np.linalg.det(np.hstack([self.coords[:-1], np.ones((3, 1))])))
 
     def reflect_image(self, image_y):
         self.coords[:, 1] = image_y - self.coords[:, 1]
@@ -82,13 +82,13 @@ class Tangram:
                 return (s2_mag > s0_mag) ^ (angle < 0.5 * np.pi)
 
     def process(self, image_y):
-        # TODO: verify functionality of commented code
-        # sizes = ['small', 'small', 'medium', 'large', 'large']
-        # triangles = [(piece, i) for i, piece in enumerate(self.pieces) if 'triangle' in piece.shape]
-        # sorted_indices = np.argsort([triangle.area for triangle, _ in triangles])
-        # for idx, i in enumerate(sorted_indices):
-        #     self.pieces[triangles[i][1]].shape = f'{sizes[idx]} triangle'
+        sizes = ['small', 'small', 'medium', 'large', 'large']
+        triangles = [(piece, i) for i, piece in enumerate(self.pieces) if 'triangle' in piece.shape]
+        sorted_indices = np.argsort([triangle.area for triangle, _ in triangles])
+        for idx, i in enumerate(sorted_indices):
+            self.pieces[triangles[i][1]].shape = f'{sizes[idx]} triangle'
 
+        # TODO: verify functionality of commented code
         # if self.paralellogram_wrong():
         #     for piece in self.pieces:
         #         piece.reflect_image(image_y)

@@ -30,30 +30,22 @@ def extract_corners_from_image(image_path):
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         # get largest contour
-        # TODO: debug/verify this logic
         contour = None
         for c in contours:
-            # TODO: remove duplicate points
+            # process contour to remove duplicate points
             c = cv2.convexHull(c)
-            if len(c) not in [3, 4]:
-                # print(len(c))
-                # breakpoint()
-                continue
 
-            contour = c
-            break
+            # approximate polygon based on contour
+            # epsilon is max distance between contour and approximate polygon, larger epsilon results in more simplified polygon
+            epsilon = 0.02 * cv2.arcLength(c, True)
+            corners = cv2.approxPolyDP(c, epsilon, True).reshape(-1, 2)
 
-        if contour is None:
-            continue
-
-        # TODO: is this step necessary if convex hull is being done?
-        # approximate polygon based on contour
-        # epsilon is max distance between contour and approximate polygon, larger epsilon results in more simplified polygon
-        epsilon = 0.02 * cv2.arcLength(contour, True)
-        corners = cv2.approxPolyDP(contour, epsilon, True).reshape(-1, 2)
+            if len(corners) in [3, 4]:
+                contour = corners
+                break
 
         # add piece to tangram
-        tangram.add_piece(Piece(corners, color))
+        tangram.add_piece(Piece(contour, color))
 
         if DEBUG:
             # display mask
@@ -70,15 +62,12 @@ def extract_corners_from_image(image_path):
             # display image with marked corners
             corner_image = img.copy()
 
-            for corner in corners:
-                cv2.circle(corner_image, tuple(corner), 4, (0, 255, 255), -1)
+            for corner in contour:
+                cv2.circle(corner_image, tuple(contour), 4, (0, 255, 255), -1)
 
             cv2.imshow('Corner Image', cv2.cvtColor(corner_image, cv2.COLOR_HSV2BGR))
             cv2.waitKey(0)
             cv2.destroyAllWindows()
-
-        # add piece to tangram
-        tangram.add_piece(Piece(corners, color))
 
     tangram.process(img.shape[1])
 
