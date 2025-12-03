@@ -48,7 +48,9 @@ def extract_corners_from_image(image_path):
         tangram.add_piece(Piece(contour, color))
 
     # process tangram
-    tangram.process(img.shape[1])
+    flip = tangram.process(img.shape[1])
+    if DEBUG and flip:
+        img = np.ascontiguousarray(np.flip(img, axis=1))
 
     if DEBUG:
         for piece in tangram.pieces:

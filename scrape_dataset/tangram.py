@@ -33,7 +33,8 @@ class Piece:
         return int(np.linalg.det(np.hstack([self.coords[:-1], np.ones((3, 1))])))
 
     def reflect_image(self, image_y):
-        self.coords[:, 1] = image_y - self.coords[:, 1]
+        self.coords[:, 0] = image_y - self.coords[:, 0]
+        self.coords = self.coords[::-1]
 
     def calculate_pose(self):
         theta = None
@@ -79,7 +80,7 @@ class Tangram:
                 s0_mag = np.linalg.norm(s0)
 
                 angle = np.arccos(np.dot(s2, s0) / (s2_mag * s0_mag))
-                return (s2_mag > s0_mag) ^ (angle < 0.5 * np.pi)
+                return (s2_mag > s0_mag) == (angle < 0.5 * np.pi)
 
     def process(self, image_y):
         sizes = ['small', 'small', 'medium', 'large', 'large']
@@ -88,10 +89,12 @@ class Tangram:
         for idx, i in enumerate(sorted_indices):
             self.pieces[triangles[i][1]].shape = f'{sizes[idx]} triangle'
 
-        # TODO: verify functionality of commented code
-        # if self.paralellogram_wrong():
-        #     for piece in self.pieces:
-        #         piece.reflect_image(image_y)
+        flip = self.paralellogram_wrong()
+        if flip:
+            for piece in self.pieces:
+                piece.reflect_image(image_y)
 
         for piece in self.pieces:
             piece.pose = piece.calculate_pose()
+
+        return flip
