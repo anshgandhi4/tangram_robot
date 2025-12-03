@@ -47,28 +47,7 @@ def extract_corners_from_image(image_path):
         # add piece to tangram
         tangram.add_piece(Piece(contour, color))
 
-        if DEBUG:
-            # display mask
-            mask_display = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
-            cv2.imshow('Mask', mask_display)
-            cv2.waitKey(0)
-
-            # display masked image
-            masked_image = cv2.bitwise_and(img, img, mask=mask)
-            masked_image = cv2.cvtColor(masked_image, cv2.COLOR_HSV2BGR)
-            cv2.imshow('Masked Image', masked_image)
-            cv2.waitKey(0)
-
-            # display image with marked corners
-            corner_image = img.copy()
-
-            for corner in contour:
-                cv2.circle(corner_image, tuple(contour), 4, (0, 255, 255), -1)
-
-            cv2.imshow('Corner Image', cv2.cvtColor(corner_image, cv2.COLOR_HSV2BGR))
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
-
+    # process tangram
     tangram.process(img.shape[1])
 
     if DEBUG:

@@ -18,7 +18,7 @@ class Piece:
         if len(self.coords) == 3:
             return 'triangle'
 
-        if abs(np.linalg.norm(self.coords[0] - self.coords[1]) - np.linalg.norm(self.coords[1] - self.coords[2])) < 1:
+        if abs(np.linalg.norm(self.coords[0] - self.coords[1]) - np.linalg.norm(self.coords[1] - self.coords[2])) < 3:
             return 'square'
 
         return 'parallelogram'
@@ -44,7 +44,7 @@ class Piece:
             s0_mag = np.linalg.norm(s0)
 
             angle = np.arccos(np.dot(s2, s0) / (s2_mag * s0_mag))
-            if angle - 0.5 * np.pi < 0.05:
+            if abs(angle - 0.5 * np.pi) < 0.05:
                 theta = np.arctan2(s2[1], s2[0])
             elif s2_mag > s0_mag:
                 theta = np.arctan2(s0[1], s0[0])
