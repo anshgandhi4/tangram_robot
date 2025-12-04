@@ -82,7 +82,7 @@ class Tangram:
     def add_piece(self, piece):
         self.pieces.append(piece)
 
-    def paralellogram_wrong(self):
+    def parallelogram_flip_required(self):
         for piece in self.pieces:
             if piece.shape == 'parallelogram':
                 s2 = piece.coords[0] - piece.coords[1]
@@ -100,7 +100,7 @@ class Tangram:
         for idx, i in enumerate(sorted_indices):
             self.pieces[triangles[i][1]].shape = f'{sizes[idx]} triangle'
 
-        flip = self.paralellogram_wrong()
+        flip = self.parallelogram_flip_required()
         if flip:
             for piece in self.pieces:
                 piece.reflect_image(image_y)
