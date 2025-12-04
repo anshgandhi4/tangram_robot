@@ -57,9 +57,20 @@ class Piece:
             base = base[1] - base[0]
             theta = np.arctan2(base[1], base[0])
         else:
-            # TODO: finish parallelogram heading implementation
-            sorted_arr = self.coords[np.lexsort((self.coords[:, 0], self.coords[:, 1]))][0]
-            theta = 0
+            s0 = self.coords[0] - self.coords[1]
+            s1 = self.coords[1] - self.coords[2]
+            s0_mag = np.linalg.norm(s0)
+            s1_mag = np.linalg.norm(s1)
+
+            if s0_mag > s1_mag:
+                theta = np.arctan2(s0[1], s0[0])
+            else:
+                theta = np.arctan2(s1[1], s1[0])
+
+            if theta > 0.5 * np.pi:
+                theta -= np.pi
+            elif theta < -0.5 * np.pi:
+                theta += np.pi
 
         return np.append(self.coords.mean(axis=0), theta)
 
