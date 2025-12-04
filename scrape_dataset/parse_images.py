@@ -21,7 +21,7 @@ def extract_corners_from_image(image_path):
     colors = [np.array(color) for color, _ in color_counter.most_common(NUM_COLORS)]
 
     # get corners for tangram shape corresponding to each color
-    tangram = Tangram()
+    tangram = Tangram(prompt=str(image_path).split('tangram-')[1].split('-solution')[0].replace('-', ' '))
     for color in colors:
         # generate image mask
         mask = np.all(img == color, axis=-1).astype(np.uint8) * 255

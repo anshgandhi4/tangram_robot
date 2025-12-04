@@ -79,6 +79,12 @@ class Tangram:
         self.pieces = pieces if pieces is not None else []
         self.prompt = prompt if prompt is not None else ''
 
+    def __str__(self):
+        return f'Tangram(pieces={self.pieces}, prompt={self.prompt})'
+
+    def __repr__(self):
+        return self.__str__()
+
     def add_piece(self, piece):
         self.pieces.append(piece)
 
