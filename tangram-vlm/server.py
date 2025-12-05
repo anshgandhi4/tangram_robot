@@ -1,5 +1,6 @@
 import pygame
 import numpy as np
+import math
 from mcp.server.fastmcp import FastMCP
 import io
 from PIL import Image
@@ -48,6 +49,16 @@ class Polygon:
     def rotate(self, angle):
         self.angle += angle
 
+class RightTriangle(Polygon):
+    def __init__(self, name, center_x, center_y, leg_length, color=(255, 255, 255), angle=0):
+        offsets_0 = (-leg_length / 3, -leg_length / 3)
+        offsets_1 = (-leg_length / 3, 2 * leg_length / 3)
+        offsets_2 = (2 * leg_length / 3, -leg_length / 3)
+        offsets = [offsets_0, offsets_1, offsets_2]
+
+        super().__init__(name, center_x, center_y, offsets, color)
+        self.rotate(angle)
+
 
 class WindowManager:
     def __init__(self, window):
@@ -80,18 +91,44 @@ class WindowManager:
     def get_all_points(self):
         return {polygon.name: [{"x": pt[0], "y": pt[1]} for pt in polygon.points] for polygon in self.polygons}
 
-
-# --- Initialization ---
 pygame.init()
 window = pygame.display.set_mode((400, 400))
 clock = pygame.time.Clock()
 window_manager = WindowManager(window)
 
-sq = Polygon("sq", 180, 180, ((-40, -40), (40, -40), (40, 40), (-40, 40)))
+scale = 3
 
-trap = Polygon("trap", 100, 60, ((-40, -10), (40, -10), (60, 10), (-60, 10)))
-window_manager.add_polygon(sq)
-window_manager.add_polygon(trap)
+yellow_sq = Polygon("yellow", 40, 40,
+                    ((-11 * scale, -11 * scale),
+                     (11 * scale, -11 * scale),
+                     (11 * scale, 11 * scale),
+                     (-11 * scale, 11 * scale)),
+                     color=pygame.color.Color("yellow1"))
+
+red_tri = RightTriangle("red", 120, 50, 30 * scale, color=pygame.Color("firebrick1"))
+
+blue_tri = RightTriangle("blue", 200, 250, 22 * scale, color=pygame.Color("blue"))
+pink_tri = RightTriangle("pink", 300, 300, 22 * scale, color=pygame.Color("lightpink2"))
+
+green_tri = RightTriangle("green", 300, 180, 43 * scale, color=pygame.Color("chartreuse3"))
+terra_cotta_tri = RightTriangle("terra cotta", 80, 300, 43 * scale, color=pygame.Color("coral3"))
+
+height_off = (21/math.sqrt(2) / 2) * scale
+horiz_long_off = (15 + 21/math.sqrt(2) / 2) * scale
+horiz_short_off = (15 - 21/math.sqrt(2) / 2) * scale
+purple_parallelogram = Polygon("purple", 300, 60, ((horiz_short_off, height_off),
+                                                   (-horiz_long_off, height_off),
+                                                   (-horiz_short_off, -height_off),
+                                                   (horiz_long_off, -height_off)),
+                                                   color=pygame.color.Color("mediumpurple3"))
+
+window_manager.add_polygon(yellow_sq)
+window_manager.add_polygon(red_tri)
+window_manager.add_polygon(blue_tri)
+window_manager.add_polygon(pink_tri)
+window_manager.add_polygon(green_tri)
+window_manager.add_polygon(terra_cotta_tri)
+window_manager.add_polygon(purple_parallelogram)
 
 _run_pygame = True
 
