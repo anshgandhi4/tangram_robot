@@ -187,7 +187,7 @@ async def get_observation_points() -> str:
 def start_mcp_server():
     """Runs the FastMCP server in this function."""
     print("Starting FastMCP server on http://localhost:8000 ...")
-    mcp.run()
+    mcp.run(transport="sse")
 
 mcp_thread = threading.Thread(target=start_mcp_server, daemon=True)
 mcp_thread.start()
