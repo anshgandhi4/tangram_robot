@@ -68,6 +68,7 @@ def extract_corners_from_image(image_path):
     # read image, use PIL to avoid libpng warnings
     img = cv2.cvtColor(np.array(Image.open(image_path)), cv2.COLOR_BGR2HSV)
     img1 = cv2.cvtColor(img, cv2.COLOR_HSV2BGR)
+    # img1 = cv2.GaussianBlur(img1, (15,15), 0)
 
     # Create ArUco dictionary and detector parameters (4x4 tags)
     aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
@@ -101,7 +102,7 @@ def extract_corners_from_image(image_path):
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
-        img, H = rectify(img, corners, rect_size=(50,50), center_pos=(img.shape[1]//2, img.shape[0]//2), output_size=(img.shape[1], img.shape[0]))
+        img, H = rectify(img1, corners, rect_size=(50,50), center_pos=(img1.shape[1]//2, img1.shape[0]//2), output_size=(img1.shape[1], img1.shape[0]))
 
         cv2.imshow("Rectified", cv2.cvtColor(img, cv2.COLOR_HSV2RGB)) # Matplotlib automatically handles RGB/RGBA arrays
         cv2.waitKey(0)
@@ -118,48 +119,64 @@ def extract_corners_from_image(image_path):
               (np.array([1, 53, 94]), np.array([1, 53, 94])),
               (np.array([2, 78, 98]), np.array([2, 78, 98])),
               (np.array([10, 65, 79]), np.array([10, 65, 79]))]
-    e = 20
-    for color, color2 in colors:
-        # color[0] = max(0, color[0] - e)
-        # color[1] = max(0, color[1] - e)
-        # color[2] = max(0, color[2] - e)
-        color[2] = int(color[0] * 255 / 360) - e
-        color[1] = int(color[1] * 255 / 100) - e
-        color[0] = int(color[2] * 255 / 100) - e
+    colors = [(np.array([250, 63, 56]), np.array([250, 63, 56])),
+              (np.array([242, 117, 115]), np.array([242, 117, 115])),
+              (np.array([216, 208, 3]), np.array([216, 208, 3])),
+              (np.array([0, 99, 144]), np.array([0, 99, 144])),
+              (np.array([130, 77, 126]), np.array([130, 77, 126])),
+              (np.array([193, 93, 78]), np.array([193, 93, 78]))]
+    # e = 20
+    # for color, color2 in colors:
+    #     color[0] = max(0, color[0] - e)
+    #     color[1] = max(0, color[1] - e)
+    #     color[2] = max(0, color[2] - e)
+    #     # color[2] = int(color[0] * 255 / 360) - e
+    #     # color[1] = int(color[1] * 255 / 100) - e
+    #     # color[0] = int(color[2] * 255 / 100) - e
 
-        color2[2] = int(color2[0] * 255 / 360) + e
-        color2[1] = int(color2[1] * 255 / 100) + e
-        color2[0] = int(color2[2] * 255 / 100) + e
-        # color2[0] = min(255, color2[0] + e)
-        # color2[1] = min(255, color2[1] + e)
-        # color2[2] = min(255, color2[2] + e)
+    #     # color2[2] = int(color2[0] * 255 / 360) + e
+    #     # color2[1] = int(color2[1] * 255 / 100) + e
+    #     # color2[0] = int(color2[2] * 255 / 100) + e
+    #     color2[0] = min(255, color2[0] + e)
+    #     color2[1] = min(255, color2[1] + e)
+    #     color2[2] = min(255, color2[2] + e)
 
     # get corners for tangram shape corresponding to each color
     tangram = Tangram()#prompt=str(image_path).split('tangram-')[1].split('-solution')[0].replace('-', ' '))
     for color in colors:
         # generate image mask
-        mask = cv2.inRange(img, color[0], color[1])
+        mask, mask_img = color_mask(
+            img,
+            color[0],
+            epsilon=30
+        )
+        mask_img = cv2.morphologyEx(mask_img, cv2.MORPH_CLOSE, (15, 15))
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, (15, 15))
+        # cv2.inRange(img, color[0], color[1])
         # pprint([[[int(z) for z in y] for y in x] for x in img])
         # mask = np.all(np.abs(img - color) < 100, axis=2img.astype(np.uint8) * 255
         # print(img.shape, np.max(img), np.min(img), img.dtype, color)
         # print(np.min(np.abs(img - color)))
 
-        cv2.imshow('img', cv2.cvtColor(img, cv2.COLOR_HSV2RGB))
+        cv2.imshow('img', img)
         cv2.waitKey(0)
+        cv2.imshow('maskim', mask_img.astype(np.uint8))
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
 
-        cv2.imshow('diff', cv2.cvtColor(np.abs(img - color[0]).astype(np.uint8), cv2.COLOR_HSV2BGR))
-        cv2.waitKey(0)
+        # cv2.imshow('diff', np.abs(img - color[0]).astype(np.uint8))
+        # cv2.waitKey(0)
 
         color_img = np.zeros_like(img, dtype=np.uint8)
         color_img[:,:,0] = color[0][0]
         color_img[:,:,1] = color[0][1]
         color_img[:,:,2] = color[0][2]
-        cv2.imshow('color', cv2.cvtColor(color_img, cv2.COLOR_HSV2BGR))
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        # cv2.imshow('color', cv2.cvtColor(color_img, cv2.COLOR_HSV2BGR))
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
 
         # extract contours from mask
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         # get largest contour
         contour = None
@@ -180,19 +197,19 @@ def extract_corners_from_image(image_path):
         if contour is not None:
             tangram.add_piece(Piece(contour, color[0]))
 
-        if DEBUG:
-            # display mask
-            mask_display = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
-            cv2.imshow('Mask', mask_display)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
+        # if DEBUG:
+        #     # display mask
+        #     mask_display = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
+        #     cv2.imshow('Mask', mask_display)
+        #     cv2.waitKey(0)
+        #     cv2.destroyAllWindows()
 
-            # display masked image
-            masked_image = cv2.bitwise_and(img, img, mask=mask)
-            masked_image = cv2.cvtColor(masked_image, cv2.COLOR_HSV2BGR)
-            cv2.imshow('Masked Image', masked_image)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
+        #     # display masked image
+        #     masked_image = cv2.bitwise_and(img, img, mask=mask)
+        #     masked_image = cv2.cvtColor(masked_image, cv2.COLOR_HSV2BGR)
+        #     cv2.imshow('Masked Image', masked_image)
+        #     cv2.waitKey(0)
+        #     cv2.destroyAllWindows()
 
     # process tangram
     flip = tangram.process(img.shape[1])
