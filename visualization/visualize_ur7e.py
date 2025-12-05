@@ -1,128 +1,147 @@
 #!/usr/bin/env python3
 """
-Basic viser server for visualizing the UR7e robot with pedestal.
-Uses yourdfpy to load and display the URDF model.
+Basic UR7e visualization using viser and yourdfpy.
 """
+
 import os
-import time
+import subprocess
+import tempfile
+from pathlib import Path
+
 import numpy as np
 import viser
 import yourdfpy
 
-def main():
-    # Path to the URDF file
-    urdf_path = os.path.join(
-        os.path.dirname(os.path.dirname(__file__)),
-        "assets",
-        "ur7e.urdf"
-    )
 
-    # Check if URDF exists
-    if not os.path.exists(urdf_path):
-        print(f"Error: URDF file not found at {urdf_path}")
-        print("Please run the xacro conversion first:")
-        print("  cd assets")
-        print("  conda activate text2tangram")
-        print("  xacro ur7e_resolved.urdf.xacro > ur7e.urdf")
-        return
+def process_xacro_to_urdf(xacro_path: str, ur_type: str = "ur7e") -> str:
+    """
+    Process xacro file to URDF.
 
-    print(f"Loading URDF from: {urdf_path}")
+    Args:
+        xacro_path: Path to the xacro file
+        ur_type: UR robot type (e.g., "ur7e")
 
-    # Load the URDF
+    Returns:
+        Path to the generated URDF file
+    """
+    # Get the base directory for ur_description
+    ur_description_path = Path(xacro_path).parent.parent
+
+    # Create temporary file for URDF output
+    temp_urdf = tempfile.NamedTemporaryFile(mode='w', suffix='.urdf', delete=False)
+    temp_urdf_path = temp_urdf.name
+    temp_urdf.close()
+
+    # Process xacro with required arguments
+    cmd = [
+        'xacro',
+        xacro_path,
+        f'ur_type:={ur_type}',
+        f'name:=ur',
+        f'joint_limit_params:={ur_description_path}/config/{ur_type}/joint_limits.yaml',
+        f'kinematics_params:={ur_description_path}/config/{ur_type}/default_kinematics.yaml',
+        f'physical_params:={ur_description_path}/config/{ur_type}/physical_parameters.yaml',
+        f'visual_params:={ur_description_path}/config/{ur_type}/visual_parameters.yaml',
+    ]
+
+    print(f"Processing xacro: {' '.join(cmd)}")
+
     try:
-        robot = yourdfpy.URDF.load(urdf_path)
-        print(f"Successfully loaded robot: {robot.name}")
-        print(f"Number of links: {len(robot.link_map)}")
-        print(f"Number of joints: {len(robot.joint_map)}")
-    except Exception as e:
-        print(f"Error loading URDF: {e}")
-        return
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+
+        # Write URDF to temp file
+        with open(temp_urdf_path, 'w') as f:
+            f.write(result.stdout)
+
+        print(f"URDF generated at: {temp_urdf_path}")
+        return temp_urdf_path
+
+    except subprocess.CalledProcessError as e:
+        print(f"Error processing xacro: {e}")
+        print(f"stderr: {e.stderr}")
+        raise
+    except FileNotFoundError:
+        print("ERROR: xacro command not found. Please install it:")
+        print("  pip install xacro")
+        raise
+
+
+def main():
+    """Main visualization function."""
+    # Get paths
+    script_dir = Path(__file__).parent
+    project_root = script_dir.parent
+    xacro_path = project_root / "assets" / "ur_description" / "urdf" / "ur.urdf.xacro"
+
+    if not xacro_path.exists():
+        raise FileNotFoundError(f"Xacro file not found at: {xacro_path}")
+
+    print("=" * 60)
+    print("UR7e Viser Visualization")
+    print("=" * 60)
+
+    # Process xacro to URDF
+    print("\n1. Processing xacro to URDF...")
+    urdf_path = process_xacro_to_urdf(str(xacro_path), ur_type="ur7e")
+
+    # Load URDF with yourdfpy
+    print("\n2. Loading URDF with yourdfpy...")
+    robot = yourdfpy.URDF.load(urdf_path)
+    print(f"   Loaded robot with {len(robot.link_map)} links and {len(robot.joint_map)} joints")
 
     # Create viser server
-    server = viser.ViserServer()
-    print(f"Viser server started at http://localhost:8080")
+    print("\n3. Starting viser server...")
+    server = viser.ViserServer(port=8080)
+    print("   Viser server started at http://localhost:8080")
 
-    # Add the robot to the scene
+    # Add robot to scene
+    print("\n4. Adding robot to scene...")
+
     # Get the robot configuration (all joints at zero)
     cfg = np.zeros(len(robot.actuated_joint_names))
 
-    # Get the robot's scene
-    robot_scene = robot.scene
+    # Add robot meshes to viser
+    # Note: yourdfpy provides mesh data, we need to add it to viser
+    scene = robot.scene
 
-    # Add each mesh from the robot to viser
-    for geom in robot_scene.geometry.values():
-        # Get mesh vertices and faces
-        vertices = geom.vertices
-        faces = geom.faces
+    # Add each mesh from the scene
+    for node in scene.graph.nodes_geometry:
+        for mesh in scene.graph.geometry[node]:
+            # Get mesh transform
+            transform = scene.graph.get_transform(node)[0]
 
-        # Add mesh to viser
-        server.add_mesh_simple(
-            name=f"robot_mesh_{id(geom)}",
-            vertices=vertices,
-            faces=faces,
-            color=(0.7, 0.7, 0.7),
-        )
+            # Add mesh to viser
+            vertices = mesh.vertices
+            faces = mesh.faces
 
-    # Add coordinate frame at origin
-    server.add_frame(
-        name="world",
-        wxyz=(1.0, 0.0, 0.0, 0.0),
-        position=(0.0, 0.0, 0.0),
-        axes_length=0.3,
-        axes_radius=0.01,
-    )
+            # Create a unique name for this mesh
+            mesh_name = f"{node}_{hash(mesh.vertices.tobytes())}"
 
-    # Add GUI controls for joint angles
-    joint_sliders = {}
-    for i, joint_name in enumerate(robot.actuated_joint_names):
-        joint = robot.joint_map[joint_name]
+            server.add_mesh_simple(
+                name=mesh_name,
+                vertices=vertices,
+                faces=faces,
+                position=transform[:3, 3],
+                wxyz_quaternion=np.array([1.0, 0.0, 0.0, 0.0]),  # We'll handle rotation separately
+                color=(200, 200, 200),
+            )
 
-        # Get joint limits if available
-        if hasattr(joint, 'limit') and joint.limit is not None:
-            lower = joint.limit.lower if joint.limit.lower is not None else -np.pi
-            upper = joint.limit.upper if joint.limit.upper is not None else np.pi
-        else:
-            lower = -np.pi
-            upper = np.pi
+    print("\n5. Visualization ready!")
+    print("   - Open http://localhost:8080 in your browser")
+    print("   - Press Ctrl+C to exit")
+    print("=" * 60)
 
-        # Create slider for this joint
-        slider = server.add_gui_slider(
-            name=joint_name,
-            min=lower,
-            max=upper,
-            step=0.01,
-            initial_value=0.0,
-        )
-        joint_sliders[joint_name] = slider
-
-    # Add reset button
-    reset_button = server.add_gui_button("Reset Pose")
-
-    print("\nVisualization ready!")
-    print("- Open http://localhost:8080 in your browser")
-    print("- Use the sliders to control joint angles")
-    print("- Use mouse to rotate/pan/zoom the view")
-
-    # Main loop to update robot configuration
+    # Keep server running
     try:
         while True:
-            # Check if reset button was clicked
-            if reset_button.value:
-                for slider in joint_sliders.values():
-                    slider.value = 0.0
-                reset_button.value = False
-
-            # Get current joint values from sliders
-            cfg = np.array([joint_sliders[name].value for name in robot.actuated_joint_names])
-
-            # Update robot configuration
-            # Note: For a full interactive visualization, you would update
-            # the mesh transforms based on forward kinematics here
-
-            time.sleep(0.01)
-
+            server.flush()  # Process events
     except KeyboardInterrupt:
         print("\nShutting down...")
+    finally:
+        # Clean up temp file
+        if os.path.exists(urdf_path):
+            os.unlink(urdf_path)
+
 
 if __name__ == "__main__":
     main()
