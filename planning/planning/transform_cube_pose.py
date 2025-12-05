@@ -16,8 +16,18 @@ class TransformCubePose(Node):
         self.cube_pose_sub = self.create_subscription(PointStamped, '/cube_pose', self.cube_pose_callback, 10)
         self.cube_pose_pub = self.create_publisher(PointStamped, '/transformed_cube_pose', 10)
 
+        self.create_timer(0.01, self.tf_test)
+
         rclpy.spin_once(self, timeout_sec=2)
         self.cube_pose = None
+
+    def tf_test(self):
+        transformed = PointStamped()
+        transformed.header.frame_id = 'base_link'
+        transformed.point.x = 0.12
+        transformed.point.y = 0.61
+        transformed.point.z = -0.115
+        self.cube_pose_pub.publish(transformed)
 
     def cube_pose_callback(self, msg: PointStamped):
         if self.cube_pose is None:
@@ -34,7 +44,8 @@ class TransformCubePose(Node):
             PointStamped: point in base_link_frame in form [x, y, z]
         """
 
-        pose = self.tf_buffer.lookup_transform('base_link', 'camera_depth_optical_frame', rclpy.time.Time()).transform
+        pose = self.tf_buffer.lookup_transform('base_link', 'wrist_3_link', rclpy.time.Time()).transform
+        self.get_logger().info(f"Transform: {pose}")
 
         G = np.eye(4)
         G[:3, :3] = R.from_quat([pose.rotation.x, pose.rotation.y, pose.rotation.z, pose.rotation.w]).as_matrix()
