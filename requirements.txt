@@ -7,3 +7,5 @@ tqdm
 viser
 yourdfpy
 xacro
+tyro
+robot_descriptions
