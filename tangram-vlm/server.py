@@ -8,6 +8,7 @@ import threading
 import base64
 import asyncio
 import json
+import shapely.geometry as sg
 
 class Polygon:
     def __init__(self, name, center_x, center_y, offsets, color=(255, 255, 255)):
@@ -49,6 +50,7 @@ class Polygon:
     def rotate(self, angle):
         self.angle += angle
 
+
 class RightTriangle(Polygon):
     def __init__(self, name, center_x, center_y, leg_length, color=(255, 255, 255), angle=0):
         offsets_0 = (-leg_length / 3, -leg_length / 3)
@@ -87,6 +89,25 @@ class WindowManager:
                 return True
         print(f"Warning: Polygon {name} not found for rotation.")
         return False
+    
+    def intersections(self, name):
+        # Find the polygon by name
+        target_polygon = None
+        for polygon in self.polygons:
+            if polygon.name == name:
+                target_polygon = polygon
+                break
+        if target_polygon is None:
+             return f"Polygon {name} not found."
+        
+        polygon_shape = sg.Polygon([(pt[0], pt[1]) for pt in target_polygon.points])
+        for polygon in self.polygons:
+            if polygon.name != name:
+                polygon_shape2 = sg.Polygon([(pt[0], pt[1]) for pt in polygon.points])
+                intersection = polygon_shape.intersection(polygon_shape2)
+                if intersection.area > 5:
+                    return f"Intersection found between {name} and {polygon.name}"
+        return "No intersections found."
 
     def get_all_points(self):
         return {polygon.name: [{"x": pt[0], "y": pt[1]} for pt in polygon.points] for polygon in self.polygons}
@@ -167,6 +188,13 @@ async def rotate_polygon(name: str, angle: float) -> bool:
     return result
 
 @mcp.tool()
+async def intersections(name: str) -> str:
+    """Checks if a polygon intersects with any other polygon."""
+    await asyncio.sleep(1)
+    result = window_manager.intersections(name)
+    return result
+
+@mcp.tool()
 async def get_observation() -> str:
     """Captures the current pygame window as a base64 PNG."""
     await asyncio.sleep(1)
@@ -187,7 +215,7 @@ async def get_observation_points() -> str:
 def start_mcp_server():
     """Runs the FastMCP server in this function."""
     print("Starting FastMCP server on http://localhost:8000 ...")
-    mcp.run()
+    mcp.run(transport="sse")
 
 mcp_thread = threading.Thread(target=start_mcp_server, daemon=True)
 mcp_thread.start()
