@@ -45,7 +45,7 @@ class Piece:
             s0_mag = np.linalg.norm(s0)
 
             angle = np.arccos(np.dot(s2, s0) / (s2_mag * s0_mag))
-            if abs(angle - 0.5 * np.pi) < 0.05:
+            if abs(angle - 0.5 * np.pi) < 0.2:
                 theta = np.arctan2(s2[1], s2[0])
             elif s2_mag > s0_mag:
                 theta = np.arctan2(s0[1], s0[0])
