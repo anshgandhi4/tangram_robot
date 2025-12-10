@@ -10,6 +10,8 @@ import yourdfpy
 import viser
 from viser.extras import ViserUrdf
 
+from pieces import pieces
+
 
 def get_package_path(package_name: str) -> Path | None:
     """Get the path to a ROS package using robot_descriptions."""
@@ -112,25 +114,9 @@ def create_robot_control_sliders(
     return slider_handles, initial_config
 
 
-def add_link_frames(
-    server: viser.ViserServer, viser_urdf: ViserUrdf, axes_length: float = 0.1
-) -> dict[str, viser.FrameHandle]:
-    """Add coordinate frame visualization for each link in the URDF."""
-    frame_handles = {}
-    for link_name in viser_urdf._urdf.link_map.keys(): # dict_keys(['world', 'pedestal', 'controller_box', 'pedestal_feet', 'mounting_plate', 'base_link', 'base_link_inertia', 'shoulder_link', 'upper_arm_link', 'forearm_link', 'wrist_1_link', 'wrist_2_link', 'wrist_3_link', 'ft_frame', 'base', 'flange', 'tool0'])
-        frame = server.scene.add_frame(
-            f"/urdf/{link_name}/frame",
-            axes_length=axes_length,
-            axes_radius=axes_length * 0.05,
-        )
-        frame_handles[link_name] = frame
-    return frame_handles # length 17
-
-
 def main(
     load_meshes: bool = True,
     load_collision_meshes: bool = False,
-    show_frames: bool = True,
 ) -> None:
     # Start viser server.
     server = viser.ViserServer()
@@ -155,10 +141,6 @@ def main(
         load_collision_meshes=load_collision_meshes,
         collision_mesh_color_override=(1.0, 0.0, 0.0, 0.5),
     )
-    # Add coordinate frames for each link.
-    frame_handles = {}
-    if show_frames:
-        frame_handles = add_link_frames(server, viser_urdf)
 
     # Create sliders in GUI that help us move the robot joints.
     with server.gui.add_folder("Joint position control"):
@@ -175,9 +157,6 @@ def main(
         show_collision_meshes_cb = server.gui.add_checkbox(
             "Show collision meshes", viser_urdf.show_collision
         )
-        show_frames_cb = server.gui.add_checkbox(
-            "Show frames", show_frames
-        )
 
     @show_meshes_cb.on_update
     def _(_):
@@ -186,11 +165,6 @@ def main(
     @show_collision_meshes_cb.on_update
     def _(_):
         viser_urdf.show_collision = show_collision_meshes_cb.value
-
-    @show_frames_cb.on_update
-    def _(_):
-        for frame in frame_handles.values():
-            frame.visible = show_frames_cb.value
 
     # Hide checkboxes if meshes are not loaded.
     show_meshes_cb.visible = load_meshes
@@ -212,6 +186,63 @@ def main(
             trimesh_scene.bounds[0, 2] if trimesh_scene is not None else 0.0,
         ),
     )
+
+    dark_blue_triangle = server.scene.add_mesh_simple(
+        "/dark_blue_triangle",
+        vertices=pieces["Dark Blue Triangle"]["vertices"],
+        faces=pieces["Dark Blue Triangle"]["faces"],
+        color=(0.0, 0.0, 139 / 255.0),
+        position=(0.875, 0.5, 0.0),
+    )
+
+    magenta_square = server.scene.add_mesh_simple(
+        "/magenta_square",
+        vertices=pieces["Magenta Square"]["vertices"],
+        faces=pieces["Magenta Square"]["faces"],
+        color=(1.0, 0.35, .95),
+        position=(0.875, 0.5, 0.1),
+    )
+
+    red_triangle = server.scene.add_mesh_simple(
+        "/red_triangle",
+        vertices=pieces["Red Triangle"]["vertices"],
+        faces=pieces["Red Triangle"]["faces"],
+        color=(1.0, 0.0, 0.0),
+        position=(0.875, 0.5, 0.2),
+    )
+
+    green_triangle = server.scene.add_mesh_simple(
+        "/yellow_square",
+        vertices=pieces["Green Triangle"]["vertices"],
+        faces=pieces["Green Triangle"]["faces"],
+        color=(0.0, 1.0, 0.0),
+        position=(0.875, 0.5, 0.3),
+    )
+
+    yellow_triangle = server.scene.add_mesh_simple(
+        "/purple_parallelogram",
+        vertices=pieces["Yellow Triangle"]["vertices"],
+        faces=pieces["Yellow Triangle"]["faces"],
+        color=(1.0, 1.0, 0.0),
+        position=(0.875, 0.5, 0.4),
+    )
+
+    light_blue_triangle = server.scene.add_mesh_simple(
+        "/light_blue_triangle",
+        vertices=pieces["Light Blue Triangle"]["vertices"],
+        faces=pieces["Light Blue Triangle"]["faces"],
+        color=(0 / 255.0, 127 / 255.0, 255 / 255.0),
+        position=(0.875, 0.5, 0.5),
+    )
+    
+    hot_pink_parallelogram = server.scene.add_mesh_simple(
+        "/hot_pink_parallelogram",
+        vertices=pieces["Hot Pink Parallelogram"]["vertices"],
+        faces=pieces["Hot Pink Parallelogram"]["faces"],
+        color=(1.0, 0 / 255.0, 80 / 255.0),
+        position=(0.875, 0.5, 0.6),
+    )
+
 
     # Create joint reset button.
     reset_button = server.gui.add_button("Reset")
