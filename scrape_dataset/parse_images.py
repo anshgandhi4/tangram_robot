@@ -130,13 +130,13 @@ def extract_corners_from_image(image_path):
     # cv2.destroyAllWindows()
 
     if REAL:
-        colors = [(np.array([79, 145, 109]), np.array([108, 255, 237]), 'blue'),
-                  (np.array([36, 168, 82]),  np.array([68, 255, 255]),  'green'),
-                  (np.array([25, 208, 154]), np.array([36, 255, 255]),  'yellow'),
-                  (np.array([131, 91, 90]),  np.array([179, 255, 255]), 'purple'),
-                  (np.array([0, 171, 154]),  np.array([11, 196, 176]),  'terracotta'),
-                  (np.array([0, 143, 183]),  np.array([11, 173, 209]),  'pink'),
-                  (np.array([0, 199, 165]),  np.array([11, 242, 216]),  'red')]
+        colors = [(np.array([108, 104, 142]), np.array([118, 219, 203]), 'blue'),
+                  (np.array([103, 126, 180]), np.array([111, 213, 233]), 'light blue'),
+                  (np.array([73, 87, 63]),    np.array([104, 183, 95]),  'green'),
+                  (np.array([24, 117, 208]),  np.array([31, 255, 255]),  'yellow'),
+                  (np.array([121, 47, 193]),  np.array([127, 101, 245]), 'purple'),
+                  (np.array([162, 154, 179]), np.array([173, 203, 236]), 'hot pink'),
+                  (np.array([0, 199, 165]),   np.array([11, 242, 216]),  'red')]
     else:
         # get count of all non-gray colors present in image
         color_counter = Counter([tuple(pixel) for row in img for pixel in row if pixel[1] != 0])
