@@ -1,81 +1,53 @@
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import PointCloud2
-from geometry_msgs.msg import PointStamped
+from sensor_msgs.msg import Image
+from geometry_msgs.msg import PointStamped, TransformStamped
 import numpy as np
-import sensor_msgs_py.point_cloud2 as pc2
 from std_msgs.msg import Header
+from cv_bridge import CvBridge
 
-class RealSensePCSubscriber(Node):
+import sys
+sys.path.append('src')
+sys.path.append('src/scrape_dataset')
+
+from scrape_dataset.parse_images import extract_corners_from_image
+from scrape_dataset.tangram import Tangram, Piece
+
+class RealSenseSubscriber(Node):
     def __init__(self):
-        super().__init__('realsense_pc_subscriber')
-
-        # Plane coefficients and max distance (meters)
-        self.declare_parameter('plane.a', 0.003)
-        self.declare_parameter('plane.b', 0.999)
-        self.declare_parameter('plane.c', 0.038)
-        self.declare_parameter('plane.d', -0.076)
-        self.declare_parameter('max_distance', 0.3)
-
-        self.a = self.get_parameter('plane.a').value
-        self.b = self.get_parameter('plane.b').value
-        self.c = self.get_parameter('plane.c').value
-        self.d = self.get_parameter('plane.d').value
-        self.max_distance = self.get_parameter('max_distance').value
-
-        # Subscribers
-        self.pc_sub = self.create_subscription(
-            PointCloud2,
-            '/camera/camera/depth/color/points',
-            self.pointcloud_callback,
-            10
-        )
+        super().__init__('realsense_subscriber')
 
         # Publishers
-        self.cube_pose_pub = self.create_publisher(PointStamped, '/cube_pose', 1)
-        self.filtered_points_pub = self.create_publisher(PointCloud2, '/filtered_points', 1)
+        self.tangram_publishers = []
+        for i in range(7):
+            pub = self.create_publisher(PointStamped, f'/tangram/piece_{i}_pose', 1)
+            self.tangram_publishers.append(pub)
 
-        self.get_logger().info("Subscribed to PointCloud2 topic and marker publisher ready")
+        self.rect_pub = self.create_publisher(Image, '/tangram/rectified_image', 1)
+        self.output_pub = self.create_publisher(Image, '/tangram/output_image', 1)
 
-    def pointcloud_callback(self, msg: PointCloud2):
-        # Convert PointCloud2 to Nx3 array
-        points = []
-        for p in pc2.read_points(msg, field_names=('x','y','z'), skip_nans=True):
-            points.append([p[0], p[1], p[2]])
+        self.cam_sub = self.create_subscription(Image, '/camera/camera/color/image_raw', self.image_callback, 1)
+        self.bridge = CvBridge()
 
-        points = np.array(points)
+    def image_callback(self, msg):
+        # self.get_logger().info('processing image')
+        tangram = extract_corners_from_image(self.bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8'), self.get_logger())
+        # self.get_logger().info(f'{tangram}')
+        if len(tangram.pieces) <= 7:
+            for p in range(len(tangram.pieces)):
+                piece = tangram.pieces[p]
+                # self.get_logger().info(f"Detected piece of color {piece.color} with corners: {piece.coords}")
 
-        # Apply other filtering relative to plane
-        filtered_points = []
-        for point in points:
-            if np.sum(point**2) <= self.max_distance and self.a * point[0]  + self.b * point[1] + self.c * point[2] + self.d <= 0:
-                filtered_points.append(point)
-
-        # Compute position of the cube via remaining points
-        filtered_points = np.array(filtered_points)
-        cube = np.median(filtered_points, axis=0)
-
-        self.get_logger().info(f"Filtered points: {filtered_points.shape[0]}")
-
-        cube_pose = PointStamped()
-        cube_pose.header = msg.header
-        cube_pose.point.x = float(cube[0])
-        cube_pose.point.y = float(cube[1])
-        cube_pose.point.z = float(cube[2])
-
-        self.cube_pose_pub.publish(cube_pose)
-
-        self.publish_filtered_points(filtered_points, msg.header)
-
-    def publish_filtered_points(self, filtered_points: np.ndarray, header: Header):
-        # Create PointCloud2 message from filtered Nx3 array
-        filtered_msg = pc2.create_cloud_xyz32(header, filtered_points.tolist())
-        self.filtered_points_pub.publish(filtered_msg)
-
+                piece_pose = PointStamped()
+                piece_pose.header = msg.header
+                piece_pose.point.x = float(piece.pose[0] / 100)
+                piece_pose.point.y = float(piece.pose[1] / 100)
+                piece_pose.point.z = float(piece.pose[2])
+                self.tangram_publishers[p].publish(piece_pose)
 
 def main(args=None):
     rclpy.init(args=args)
-    node = RealSensePCSubscriber()
+    node = RealSenseSubscriber()
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()

@@ -22,50 +22,16 @@ def generate_launch_description():
         ),
         launch_arguments={
             'pointcloud.enable': 'true',
-            'rgb_camera.color_profile': '1920x1080x30',
+            'rgb_camera.color_profile': '1920x1080x30', #'640x360x30',
         }.items(),
     )
-
-    # Args for perception node
-    plane_a_launch_arg = DeclareLaunchArgument(
-        'plane_a',
-        default_value='0.003'
-    )
-    plane_b_launch_arg = DeclareLaunchArgument(
-        'plane_b',
-        default_value='0.999'
-    )
-    plane_c_launch_arg = DeclareLaunchArgument(
-        'plane_c',
-        default_value='0.038'
-    )
-    plane_d_launch_arg = DeclareLaunchArgument(
-        'plane_d',
-        default_value='-0.076'
-    )
-    max_distance_launch_arg = DeclareLaunchArgument(
-        'max_distance',
-        default_value='0.3'
-    )
-    plane_a = LaunchConfiguration('plane_a')
-    plane_b = LaunchConfiguration('plane_b')
-    plane_c = LaunchConfiguration('plane_c')
-    plane_d = LaunchConfiguration('plane_d')
-    max_distance = LaunchConfiguration('max_distance')
 
     # Perception node
     perception_node = Node(
         package='perception',
         executable='process_pointcloud',
         name='process_pointcloud',
-        output='screen',
-        parameters=[{
-            'plane.a': plane_a,
-            'plane.b': plane_b,
-            'plane.c': plane_c,
-            'plane.d': plane_d,
-            'max_distance': max_distance,
-        }]
+        output='screen'
     )
 
     # ArUco recognition
@@ -75,6 +41,16 @@ def generate_launch_description():
                 get_package_share_directory('ros2_aruco'),
                 'launch',
                 'aruco_recognition.launch.py'
+            )
+        )
+    )
+
+    aruco_launch_table = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                get_package_share_directory('ros2_aruco'),
+                'launch',
+                'aruco_recognition_table.launch.py'
             )
         )
     )
@@ -155,17 +131,13 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        # ar_marker_launch_arg,
-        # plane_a_launch_arg,
-        # plane_b_launch_arg,
-        # plane_c_launch_arg,
-        # plane_d_launch_arg,
-        # max_distance_launch_arg,
-        # realsense_launch,
-        # aruco_launch,
-        # perception_node,
-        # planning_tf_node,
-        # planning_ik_node,
+        ar_marker_launch_arg,
+        realsense_launch,
+        aruco_launch,
+        aruco_launch_table,
+        perception_node,
+        planning_tf_node,
+        planning_ik_node,
         transform_cube_pose_node,
         static_base_world,
         moveit_launch,

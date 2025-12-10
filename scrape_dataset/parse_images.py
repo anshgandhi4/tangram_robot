@@ -2,8 +2,6 @@ from collections import Counter
 import cv2
 import numpy as np
 from pathlib import Path
-from PIL import Image
-from tqdm import tqdm
 
 from tangram import Piece, Tangram
 
@@ -28,21 +26,21 @@ def rectify(image, rect_pts, rect_size=(100, 100), center_pos=(100, 100), output
 
     return rectified, H
 
-def extract_corners_from_image(image_path):
+def extract_corners_from_image(rgb_image, node=None):
     NUM_COLORS = 7
     REAL = True
-    DEBUG = True
+    DEBUG = False
 
-    # read image, use PIL to avoid libpng warnings
-    img = cv2.cvtColor(np.array(Image.open(image_path)), cv2.COLOR_RGB2HSV)
+    # read rgb image
+    img = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2HSV)
     if REAL:
-        img = cv2.resize(img, (img.shape[1] // 3, img.shape[0] // 3), interpolation=cv2.INTER_AREA)
+        # img = cv2.resize(img, (img.shape[1] // 3, img.shape[0] // 3), interpolation=cv2.INTER_AREA)
         # img = cv2.GaussianBlur(img, (15,15), 0)
         aruco_img = cv2.cvtColor(img, cv2.COLOR_HSV2BGR)
 
         # Create ArUco dictionary and detector parameters (4x4 tags)
-        aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
-        aruco_params = cv2.aruco.DetectorParameters()
+        aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_5X5_250)
+        aruco_params = cv2.aruco.DetectorParameters_create()
 
         # Generate 3D positions for all of the tags
         tag_size = 0.06
@@ -56,8 +54,13 @@ def extract_corners_from_image(image_path):
 
         # Detect ArUco markers in an image
         # Returns: corners (list of numpy arrays), ids (numpy array)
-        detector = cv2.aruco.ArucoDetector(aruco_dict, aruco_params)
-        corners, _, _ = detector.detectMarkers(aruco_img)
+        # detector = cv2.aruco.ArucoDetector(aruco_dict, aruco_params)
+        # corners, _, _ = detector.detectMarkers(aruco_img)
+        # node.get_logger().info('detecting aruco')
+        corners, _, _ = cv2.aruco.detectMarkers(
+            aruco_img, aruco_dict, parameters=aruco_params
+        )
+        # node.get_logger().info('detected aruco')
 
         found_four = False
         for cont in corners:
@@ -73,13 +76,19 @@ def extract_corners_from_image(image_path):
             for corner in corners:
                 cv2.circle(aruco_img, (int(corner[0]), int(corner[1])), 4, (255, 0, 0), -1)
 
-            cv2.imshow("Detected Corners", aruco_img)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
+            if DEBUG:
+                cv2.imshow("Detected Corners", aruco_img)
+                cv2.waitKey(0)
+                cv2.destroyAllWindows()
 
-            cv2.imshow("Rectified", img)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
+                cv2.imshow("Rectified", img)
+                cv2.waitKey(0)
+                cv2.destroyAllWindows()
+
+                if node is not None:
+                    node.rect_pub.publish(node.bridge_cv2_to_imgmsg(img, encoding='rgb8'))
+
+        # node.get_logger().info('rectification done')
 
     # # Interactive HSV threshold sliders
     # def update_threshold(*args):
@@ -150,6 +159,7 @@ def extract_corners_from_image(image_path):
 
     # get corners for tangram shape corresponding to each color
     for lower, upper, color_name in colors:
+        # node.get_logger().info(f'processing {color_name}')
         # generate image mask
         if REAL:
             mask = cv2.inRange(img, lower, upper)
@@ -233,8 +243,13 @@ def extract_corners_from_image(image_path):
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
+        if node is not None:
+            node.output_pub.publish(node.bridge_cv2_to_imgmsg(img, encoding='rgb8'))
+
     return tangram
 
 if __name__ == '__main__':
+    from PIL import Image
+    from tqdm import tqdm
     for image_path in tqdm(sorted(list((Path(__file__).parent / 'asdf').iterdir()))):
-        extract_corners_from_image(image_path)
+        extract_corners_from_image(np.array(Image.open(image_path)))

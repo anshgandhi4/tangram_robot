@@ -13,7 +13,7 @@ class TransformCubePose(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        self.cube_pose_sub = self.create_subscription(PointStamped, '/cube_pose', self.cube_pose_callback, 10)
+        self.cube_pose_sub = self.create_subscription(PointStamped, '/tangram/piece_0_pose', self.cube_pose_callback, 10)
         self.cube_pose_pub = self.create_publisher(PointStamped, '/transformed_cube_pose', 10)
 
         self.create_timer(0.01, self.tf_test)
@@ -22,6 +22,14 @@ class TransformCubePose(Node):
         self.cube_pose = None
 
     def tf_test(self):
+        transformed = PointStamped()
+        transformed.header.frame_id = 'base_link'
+        transformed.point.x = 0.12
+        transformed.point.y = 0.61
+        transformed.point.z = -0.12
+        self.cube_pose_pub.publish(transformed)
+
+    def tangram_tf_publish(self):
         transformed = PointStamped()
         transformed.header.frame_id = 'base_link'
         transformed.point.x = 0.12

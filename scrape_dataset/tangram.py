@@ -114,4 +114,6 @@ class Tangram:
         for piece in self.pieces:
             piece.pose = piece.calculate_pose()
 
+        self.pieces.sort(key=lambda piece: piece.color)
+
         return flip

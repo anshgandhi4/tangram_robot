@@ -136,7 +136,7 @@ class ArucoNode(rclpy.node.Node):
         self.get_logger().info(f"Marker size: {self.marker_size}")
         
         self.marker_size_map = {1: 0.15, 2: 0.15, 3: 0.15, 4: 0.15, 5: 0.15, 11: 0.15, 
-                                6: 0.15, 7: 0.15, 8: 0.15, 9: 0.15, 10: 0.15}
+                                6: 0.15, 7: 0.15, 8: 0.15, 9: 0.15, 10: 0.15, 0: 0.10}
         self.get_logger().info(f"Marker size map for marker ids is: {self.marker_size_map}")
 
         dictionary_id_name = (
@@ -246,7 +246,11 @@ class ArucoNode(rclpy.node.Node):
 
             if len(goal_markers) > 0:
                 goal_rvecs, goal_tvecs = [], []
-                if cv2.__version__ > "4.0.0":
+                if cv2.__version__ > "4.7.0":
+                    goal_rvecs, goal_tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(
+                        goal_corners, 0.15, self.intrinsic_mat, self.distortion
+                    )
+                elif cv2.__version__ > "4.0.0":
                     goal_rvecs, goal_tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(
                         goal_corners, 0.15, self.intrinsic_mat, self.distortion
                     )
