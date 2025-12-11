@@ -24,6 +24,7 @@ setup(
             'tf = planning.static_tf_transform:main',
             'ik = planning.ik:main',
             'transform_cube_pose = planning.transform_cube_pose:main',
+            'visualization = planning.visualization_node:main',
         ],
     },
 )
