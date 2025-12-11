@@ -100,6 +100,8 @@ class RealSenseSubscriber(Node):
                 if piece.color != 'green':
                     continue
 
+                piece.pose = np.array([0.0, 0.0, 0.0])
+
                 z_axis_quat = self.z_axis_rot(piece.pose[2] + np.pi)
                 final_quat = self.final_quat(z_axis_quat)
 
@@ -108,8 +110,9 @@ class RealSenseSubscriber(Node):
                 transform.header.frame_id = 'ar_marker_0'
                 transform.child_frame_id = f'tangram_pick_{p}'
                 transform.transform.translation.x = float(piece.pose[0])
-                transform.transform.translation.y = float(piece.pose[1])
-                transform.transform.translation.z = 0.0
+                # NOTE: THESE OFFSETS ARE BASED ON THE TRANSLATION FROM EEF TO WRIST 3
+                transform.transform.translation.y = float(piece.pose[1]) - 0.04
+                transform.transform.translation.z = 0.255
                 transform.transform.rotation.x = final_quat[0]
                 transform.transform.rotation.y = final_quat[1]
                 transform.transform.rotation.z = final_quat[2]

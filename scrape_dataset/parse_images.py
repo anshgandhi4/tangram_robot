@@ -14,12 +14,12 @@ rect_final = output_final = None
 def rectify(image, rect_pts, tag_size=100, center_pos=(100, 100), output_size=(500, 500)):
     pts = np.array(rect_pts[::-1], dtype=np.float32)
 
-    d = tag_size - 1
+    d = tag_size // 2
     x, y = center_pos
-    dst = np.array([[x,     y + d],
+    dst = np.array([[x - d, y + d],
                     [x + d, y + d],
-                    [x + d, y],
-                    [x,     y]], dtype=np.float32)
+                    [x + d, y - d],
+                    [x - d,  y - d]], dtype=np.float32)
 
     H, _ = cv2.findHomography(pts, dst, cv2.RANSAC, 3.0)
     rectified = cv2.warpPerspective(image, H, output_size)
