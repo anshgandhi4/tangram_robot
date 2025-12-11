@@ -134,7 +134,7 @@ def generate_launch_description():
         ar_marker_launch_arg,
         realsense_launch,
         aruco_launch,
-        aruco_launch_table,
+        # aruco_launch_table,
         perception_node,
         planning_tf_node,
         planning_ik_node,

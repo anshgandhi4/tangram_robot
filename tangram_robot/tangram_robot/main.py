@@ -4,7 +4,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from control_msgs.action import FollowJointTrajectory
-from geometry_msgs.msg import PointStamped
+from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import JointState
 
 from planning.ik import IKPlanner
@@ -13,7 +13,7 @@ class PickAndPlace(Node):
     def __init__(self):
         super().__init__('pick_place')
 
-        self.cube_sub = self.create_subscription(PointStamped, '/transformed_cube_pose', self.cube_callback, 1)
+        self.cube_sub = self.create_subscription(PoseStamped, '/transformed_cube_pose', self.cube_callback, 1)
         self.joint_state_sub = self.create_subscription(JointState, '/joint_states', self.joint_state_callback, 1)
 
         self.exec_ac = ActionClient(
@@ -42,7 +42,7 @@ class PickAndPlace(Node):
             self.get_logger().info("No joint state yet, cannot proceed")
             return
 
-        self.cube_pose = (cube_pose.point.x, cube_pose.point.y - 0.035, cube_pose.point.z)
+        self.cube_pose = (cube_pose.pose.position.x, cube_pose.pose.position.y - 0.035, cube_pose.pose.position.z, cube_pose.pose.orientation.x, cube_pose.pose.orientation.y, cube_pose.pose.orientation.z, cube_pose.pose.orientation.w)
 
         # 1) Move to Pre-Grasp Position (gripper above the cube)
         '''
@@ -52,7 +52,7 @@ class PickAndPlace(Node):
         z offset: +0.185 (to be above the cube by accounting for gripper length)
         '''
 
-        self.job_queue.append(self.ik_planner.compute_ik(self.joint_state, self.cube_pose[0], self.cube_pose[1], self.cube_pose[2] + 0.185))
+        self.job_queue.append(self.ik_planner.compute_ik(self.joint_state, self.cube_pose[0], self.cube_pose[1], self.cube_pose[2] + 0.185, qx=self.cube_pose[3], qy=self.cube_pose[4], qz=self.cube_pose[5], qw=self.cube_pose[6]))
 
         # 2) Move to Grasp Position (lower the gripper to the cube)
         '''
@@ -60,13 +60,13 @@ class PickAndPlace(Node):
         DO NOT CHANGE z offset lower than +0.16. 
         '''
 
-        self.job_queue.append(self.ik_planner.compute_ik(self.joint_state, self.cube_pose[0], self.cube_pose[1], self.cube_pose[2] + 0.16))
+        self.job_queue.append(self.ik_planner.compute_ik(self.joint_state, self.cube_pose[0], self.cube_pose[1], self.cube_pose[2] + 0.16, qx=self.cube_pose[3], qy=self.cube_pose[4], qz=self.cube_pose[5], qw=self.cube_pose[6]))
 
         # 3) Close the gripper. See job_queue entries defined in init above for how to add this action.
         self.job_queue.append('toggle_grip')
         
         # 4) Move back to Pre-Grasp Position
-        self.job_queue.append(self.ik_planner.compute_ik(self.joint_state, self.cube_pose[0], self.cube_pose[1], self.cube_pose[2] + 0.185))
+        self.job_queue.append(self.ik_planner.compute_ik(self.joint_state, self.cube_pose[0], self.cube_pose[1], self.cube_pose[2] + 0.185, qx=self.cube_pose[3], qy=self.cube_pose[4], qz=self.cube_pose[5], qw=self.cube_pose[6]))
 
         # 5) Move to release Position
         '''
@@ -74,7 +74,7 @@ class PickAndPlace(Node):
         Which offset will you change to achieve this and in what direction?
         '''
 
-        self.job_queue.append(self.ik_planner.compute_ik(self.joint_state, -self.cube_pose[0], self.cube_pose[1], self.cube_pose[2] + 0.185))
+        self.job_queue.append(self.ik_planner.compute_ik(self.joint_state, -self.cube_pose[0], self.cube_pose[1], self.cube_pose[2] + 0.185, qx=self.cube_pose[3], qy=self.cube_pose[4], qz=self.cube_pose[5], qw=self.cube_pose[6]))
 
         # 6) Release the gripper
         self.job_queue.append('toggle_grip')
