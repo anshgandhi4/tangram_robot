@@ -31,6 +31,8 @@ def extract_corners_from_image(rgb_image, node=None):
     REAL = True
     DEBUG = False
     ROS_PUB = True
+    CENTER = None
+    ARUCO_RATIO = None # m / pixel
     global rect_final
     global output_final
     global counter
@@ -51,7 +53,7 @@ def extract_corners_from_image(rgb_image, node=None):
             aruco_params = cv2.aruco.DetectorParameters_create()
 
         # Generate 3D positions for all of the tags
-        tag_size = 0.06
+        tag_size = 0.10
         tag_position_mapping = []
         for t in range(6):
             horz = (t % 2) * 0.09
@@ -76,7 +78,10 @@ def extract_corners_from_image(rgb_image, node=None):
                 break
 
         if found_four:
-            img, _ = rectify(aruco_img, corners, tag_size=50, center_pos=(aruco_img.shape[1]//2, aruco_img.shape[0]//2), output_size=(aruco_img.shape[1], aruco_img.shape[0]))
+            CENTER = (aruco_img.shape[1]//2, aruco_img.shape[0]//2)
+            TAG_SIZE = 50
+            ARUCO_RATIO = tag_size / TAG_SIZE
+            img, _ = rectify(aruco_img, corners, tag_size=TAG_SIZE, center_pos=CENTER, output_size=(aruco_img.shape[1], aruco_img.shape[0]))
 
             if ROS_PUB and node is not None:
                 if rect_final is None or counter < 100:
@@ -98,6 +103,8 @@ def extract_corners_from_image(rgb_image, node=None):
                 cv2.imshow("Rectified", img)
                 cv2.waitKey(0)
                 cv2.destroyAllWindows()
+        else:
+            return None
 
         # node.get_logger().info('rectification done')
 
@@ -248,6 +255,15 @@ def extract_corners_from_image(rgb_image, node=None):
     master_mask = masks[0]
     for mask in masks[1:]:
         master_mask = cv2.bitwise_or(master_mask, mask)
+
+    # convert poses from pixels to meters if possible
+    if REAL and CENTER is not None and ARUCO_RATIO is not None:
+        for piece in tangram.pieces:
+            piece.coords = piece.coords.astype(np.float32)
+            for coord in piece.coords:
+                coord[0] = float(coord[0] - CENTER[0]) * ARUCO_RATIO
+                coord[1] = float(CENTER[1] - coord[1]) * ARUCO_RATIO
+            piece.meters = True
 
     # process tangram
     flip = tangram.process(img.shape[1], enable_flip=True)

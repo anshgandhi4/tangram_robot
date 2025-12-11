@@ -130,5 +130,5 @@ def generate_launch_description():
         # transform_cube_pose_node,
         # static_base_world,
         # moveit_launch,
-        # shutdown_on_any_exit
+        shutdown_on_any_exit
     ])
