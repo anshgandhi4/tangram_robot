@@ -22,7 +22,7 @@ def generate_launch_description():
         ),
         launch_arguments={
             'pointcloud.enable': 'true',
-            'rgb_camera.color_profile': '1920x1080x30', #'640x360x30',
+            'rgb_camera.color_profile': '640x360x30',
         }.items(),
     )
 

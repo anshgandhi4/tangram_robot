@@ -100,11 +100,11 @@ class Tangram:
                 return (s2_mag > s0_mag) == (angle < 0.5 * np.pi)
 
     def process(self, image_y):
-        sizes = ['small', 'small', 'medium', 'large', 'large']
-        triangles = [(piece, i) for i, piece in enumerate(self.pieces) if 'triangle' in piece.shape]
-        sorted_indices = np.argsort([triangle.area for triangle, _ in triangles])
-        for idx, i in enumerate(sorted_indices):
-            self.pieces[triangles[i][1]].shape = f'{sizes[idx]} triangle'
+        # sizes = ['small', 'small', 'medium', 'large', 'large']
+        # triangles = [(piece, i) for i, piece in enumerate(self.pieces) if 'triangle' in piece.shape]
+        # sorted_indices = np.argsort([triangle.area for triangle, _ in triangles])
+        # for idx, i in enumerate(sorted_indices):
+        #     self.pieces[triangles[i][1]].shape = f'{sizes[idx]} triangle'
 
         flip = self.parallelogram_flip_required()
         if flip:

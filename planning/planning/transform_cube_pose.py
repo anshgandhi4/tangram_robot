@@ -15,7 +15,8 @@ class TransformCubePose(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        self.cube_pose_sub = self.create_subscription(PointStamped, '/tangram/piece_0_pose', self.tangram_tf_publish, 10)
+        self.cube_pose_sub = self.create_subscription(PointStamped, '/tangram/pick_0_pose', self.tangram_tf_publish, 10)
+        # self.cube_pose_sub = self.create_subscription(PointStamped, '/tangram/place_0_pose', self.tangram_tf_publish, 10)
         self.cube_pose_pub = self.create_publisher(PoseStamped, '/transformed_cube_pose', 10)
 
         self.create_timer(0.01, self.tf_test)

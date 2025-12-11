@@ -5,6 +5,12 @@ from pathlib import Path
 
 from tangram import Piece, Tangram
 
+global rect_final
+global output_final
+global counter
+counter = 0
+rect_final = output_final = None
+
 def rectify(image, rect_pts, tag_size=100, center_pos=(100, 100), output_size=(500, 500)):
     pts = np.array(rect_pts[::-1], dtype=np.float32)
 
@@ -24,6 +30,10 @@ def extract_corners_from_image(rgb_image, node=None):
     NUM_COLORS = 7
     REAL = True
     DEBUG = False
+    ROS_PUB = True
+    global rect_final
+    global output_final
+    global counter
 
     # read rgb image
     img = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2HSV)
@@ -66,7 +76,15 @@ def extract_corners_from_image(rgb_image, node=None):
                 break
 
         if found_four:
-            img, _ = rectify(aruco_img, corners, rect_size=50, center_pos=(aruco_img.shape[1]//2, aruco_img.shape[0]//2), output_size=(aruco_img.shape[1], aruco_img.shape[0]))
+            img, _ = rectify(aruco_img, corners, tag_size=50, center_pos=(aruco_img.shape[1]//2, aruco_img.shape[0]//2), output_size=(aruco_img.shape[1], aruco_img.shape[0]))
+
+            if ROS_PUB and node is not None:
+                if rect_final is None or counter < 100:
+                    rect_final = img
+                    counter += 1
+
+                node.rect_pub.publish(node.bridge.cv2_to_imgmsg(rect_final, encoding='bgr8'))
+
             img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
             for corner in corners:
@@ -80,9 +98,6 @@ def extract_corners_from_image(rgb_image, node=None):
                 cv2.imshow("Rectified", img)
                 cv2.waitKey(0)
                 cv2.destroyAllWindows()
-
-                if node is not None:
-                    node.rect_pub.publish(node.bridge_cv2_to_imgmsg(img, encoding='rgb8'))
 
         # node.get_logger().info('rectification done')
 
@@ -135,13 +150,13 @@ def extract_corners_from_image(rgb_image, node=None):
     # cv2.destroyAllWindows()
 
     if REAL:
-        colors = [(np.array([108, 104, 142]), np.array([118, 219, 203]), 'blue'),
-                  (np.array([103, 126, 180]), np.array([111, 213, 233]), 'light blue'),
-                  (np.array([73, 87, 63]),    np.array([104, 183, 95]),  'green'),
-                  (np.array([24, 117, 208]),  np.array([31, 255, 255]),  'yellow'),
-                  (np.array([121, 47, 193]),  np.array([127, 101, 245]), 'purple'),
-                  (np.array([162, 154, 179]), np.array([173, 203, 236]), 'hot pink'),
-                  ((np.array([0, 134, 151]), np.array([176, 144, 143])), (np.array([3, 201, 173]), np.array([179, 199, 174])), 'red')]
+        colors = [(np.array([105, 183, 126]), np.array([115, 255, 255]), 'blue'),
+                  (np.array([98, 213, 163]),  np.array([104, 255, 211]), 'light blue'),
+                  (np.array([71, 143, 0]),    np.array([99, 255, 171]),  'green'),
+                  (np.array([21, 71, 72]),    np.array([32, 255, 255]),  'yellow'),
+                  (np.array([89, 97, 163]),   np.array([119, 152, 224]), 'purple'),
+                  (np.array([154, 148, 164]), np.array([173, 197, 255]), 'hot pink'),
+                  ((np.array([0, 134, 151]), np.array([172, 129, 132])), (np.array([3, 201, 173]), np.array([179, 255, 198])), 'red')]
     else:
         # get count of all non-gray colors present in image
         color_counter = Counter([tuple(pixel) for row in img for pixel in row if pixel[1] != 0])
@@ -154,6 +169,7 @@ def extract_corners_from_image(rgb_image, node=None):
         tangram.prompt = str(image_path).split('tangram-')[1].split('-solution')[0].replace('-', ' ')
 
     # get corners for tangram shape corresponding to each color
+    masks = []
     for lower, upper, color_name in colors:
         # node.get_logger().info(f'processing {color_name}')
         # generate image mask
@@ -168,6 +184,7 @@ def extract_corners_from_image(rgb_image, node=None):
             mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, (25, 25))
         else:
             mask = np.all(img == lower, axis=-1).astype(np.uint8) * 255
+        masks.append(mask)
 
         # extract contours from mask
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -228,12 +245,16 @@ def extract_corners_from_image(rgb_image, node=None):
                 cv2.waitKey(0)
                 cv2.destroyAllWindows()
 
+    master_mask = masks[0]
+    for mask in masks[1:]:
+        master_mask = cv2.bitwise_or(master_mask, mask)
+
     # process tangram
     flip = tangram.process(img.shape[1])
     if DEBUG and flip:
         img = np.ascontiguousarray(np.flip(img, axis=1))
 
-    if DEBUG:
+    if DEBUG or (ROS_PUB and node is not None):
         for piece in tangram.pieces:
             center = (int(piece.pose[0]), int(piece.pose[1]))
             cv2.circle(img, center, 4, (12, 255, 255), -1)
@@ -241,12 +262,18 @@ def extract_corners_from_image(rgb_image, node=None):
             box = cv2.boxPoints((center, (32, 2), np.degrees(piece.pose[2]))).astype(np.int32)
             cv2.fillPoly(img, [box], (12, 255, 255))
 
-        cv2.imshow('Output Image', cv2.cvtColor(img, cv2.COLOR_HSV2BGR))
+        img = cv2.cvtColor(img, cv2.COLOR_HSV2BGR)
+
+    if DEBUG:
+        cv2.imshow('Output Image', img)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
-        if node is not None:
-            node.output_pub.publish(node.bridge_cv2_to_imgmsg(img, encoding='rgb8'))
+    if ROS_PUB and node is not None:
+        if output_final is None or counter < 100:
+            output_final = img
+        node.masked_pub.publish(node.bridge.cv2_to_imgmsg(cv2.cvtColor(master_mask, cv2.COLOR_GRAY2BGR), encoding='bgr8'))
+        node.output_pub.publish(node.bridge.cv2_to_imgmsg(output_final, encoding='bgr8'))
 
     return tangram
 

@@ -13,7 +13,16 @@ class PickAndPlace(Node):
     def __init__(self):
         super().__init__('pick_place')
 
-        self.cube_sub = self.create_subscription(PoseStamped, '/transformed_cube_pose', self.cube_callback, 1)
+        self.pick_subs = []
+        for i in range(7):
+            self.pick_subs.append(self.create_subscription(PoseStamped, f'/tangram/pick_{i}_pose', lambda x: self.pick_callback(x, i), 1))
+
+        self.place_subs = []
+        for i in range(7):
+            self.place_subs.append(self.create_subscription(PoseStamped, f'/tangram/place_{i}_pose', lambda x: self.place_callback(x, i), 1))
+
+        self.tangrams = [[None for _ in range(2)] for _ in range(7)]
+
         self.joint_state_sub = self.create_subscription(JointState, '/joint_states', self.joint_state_callback, 1)
 
         self.exec_ac = ActionClient(
@@ -23,10 +32,13 @@ class PickAndPlace(Node):
 
         self.gripper_cli = self.create_client(Trigger, '/toggle_gripper')
 
-        self.cube_pose = None
+        self.pick_pose = None
         self.joint_state = None
 
         self.ik_planner = IKPlanner()
+
+        self.currently_picking = False
+        self.create_timer(1, self.pick_place)
 
         # Entries should be of type either JointState or String('toggle_grip')
         self.job_queue = []
@@ -34,53 +46,70 @@ class PickAndPlace(Node):
     def joint_state_callback(self, msg: JointState):
         self.joint_state = msg
 
-    def cube_callback(self, cube_pose):
-        if self.cube_pose is not None:
+    def pick_callback(self, msg, i):
+        self.tangrams[i][0] = msg
+
+    def place_callback(self, msg, i):
+        self.tangrams[i][1] = msg
+
+    def pick_place(self):
+        if self.currently_picking:
+            self.get_logger().info('got rejected')
             return
 
         if self.joint_state is None:
             self.get_logger().info("No joint state yet, cannot proceed")
             return
 
-        self.cube_pose = (cube_pose.pose.position.x, cube_pose.pose.position.y - 0.035, cube_pose.pose.position.z, cube_pose.pose.orientation.x, cube_pose.pose.orientation.y, cube_pose.pose.orientation.z, cube_pose.pose.orientation.w)
+        self.get_logger().info(f'picking {self.tangrams[0][0] is None or self.tangrams[0][1] is None}')
+        for i in range(1):#len(self.tangrams)):
+            pick_pose = self.tangrams[i][0]
+            place_pose = self.tangrams[i][1]
 
-        # 1) Move to Pre-Grasp Position (gripper above the cube)
-        '''
-        Use the following offsets for pre-grasp position:
-        x offset: 0.0
-        y offset: -0.035 (Think back to lab 5, why is this needed?)
-        z offset: +0.185 (to be above the cube by accounting for gripper length)
-        '''
+            if pick_pose is None or place_pose is None:
+                continue
 
-        self.job_queue.append(self.ik_planner.compute_ik(self.joint_state, self.cube_pose[0], self.cube_pose[1], self.cube_pose[2] + 0.185, qx=self.cube_pose[3], qy=self.cube_pose[4], qz=self.cube_pose[5], qw=self.cube_pose[6]))
+            self.currently_picking = True
 
-        # 2) Move to Grasp Position (lower the gripper to the cube)
-        '''
-        Note that this will again be defined relative to the cube pose.
-        DO NOT CHANGE z offset lower than +0.16. 
-        '''
+            self.pick_pose = (pick_pose.pose.position.x, pick_pose.pose.position.y - 0.035, pick_pose.pose.position.z, pick_pose.pose.orientation.x, pick_pose.pose.orientation.y, pick_pose.pose.orientation.z, pick_pose.pose.orientation.w)
+            self.place_pose = (place_pose.pose.position.x, place_pose.pose.position.y - 0.035, place_pose.pose.position.z, place_pose.pose.orientation.x, place_pose.pose.orientation.y, place_pose.pose.orientation.z, place_pose.pose.orientation.w)
 
-        self.job_queue.append(self.ik_planner.compute_ik(self.joint_state, self.cube_pose[0], self.cube_pose[1], self.cube_pose[2] + 0.16, qx=self.cube_pose[3], qy=self.cube_pose[4], qz=self.cube_pose[5], qw=self.cube_pose[6]))
+            # 1) Move to Pre-Grasp Position (gripper above the cube)
+            '''
+            Use the following offsets for pre-grasp position:
+            x offset: 0.0
+            y offset: -0.035 (Think back to lab 5, why is this needed?)
+            z offset: +0.185 (to be above the cube by accounting for gripper length)
+            '''
 
-        # 3) Close the gripper. See job_queue entries defined in init above for how to add this action.
-        self.job_queue.append('toggle_grip')
-        
-        # 4) Move back to Pre-Grasp Position
-        self.job_queue.append(self.ik_planner.compute_ik(self.joint_state, self.cube_pose[0], self.cube_pose[1], self.cube_pose[2] + 0.185, qx=self.cube_pose[3], qy=self.cube_pose[4], qz=self.cube_pose[5], qw=self.cube_pose[6]))
+            self.job_queue.append(self.ik_planner.compute_ik(self.joint_state, self.pick_pose[0], self.pick_pose[1], self.pick_pose[2] + 0.185, qx=self.pick_pose[3], qy=self.pick_pose[4], qz=self.pick_pose[5], qw=self.pick_pose[6]))
 
-        # 5) Move to release Position
-        '''
-        We want the release position to be 0.4m on the other side of the aruco tag relative to initial cube pose.
-        Which offset will you change to achieve this and in what direction?
-        '''
+            # 2) Move to Grasp Position (lower the gripper to the cube)
+            '''
+            Note that this will again be defined relative to the cube pose.
+            DO NOT CHANGE z offset lower than +0.16. 
+            '''
 
-        self.job_queue.append(self.ik_planner.compute_ik(self.joint_state, -self.cube_pose[0], self.cube_pose[1], self.cube_pose[2] + 0.185, qx=self.cube_pose[3], qy=self.cube_pose[4], qz=self.cube_pose[5], qw=self.cube_pose[6]))
+            self.job_queue.append(self.ik_planner.compute_ik(self.joint_state, self.pick_pose[0], self.pick_pose[1], self.pick_pose[2] + 0.16, qx=self.pick_pose[3], qy=self.pick_pose[4], qz=self.pick_pose[5], qw=self.pick_pose[6]))
 
-        # 6) Release the gripper
-        self.job_queue.append('toggle_grip')
+            # 3) Close the gripper. See job_queue entries defined in init above for how to add this action.
+            self.job_queue.append('toggle_grip')
+            
+            # 4) Move back to Pre-Grasp Position
+            self.job_queue.append(self.ik_planner.compute_ik(self.joint_state, self.pick_pose[0], self.pick_pose[1], self.pick_pose[2] + 0.185, qx=self.pick_pose[3], qy=self.pick_pose[4], qz=self.pick_pose[5], qw=self.pick_pose[6]))
+
+            # 5) Move to release Position
+            '''
+            We want the release position to be 0.4m on the other side of the aruco tag relative to initial cube pose.
+            Which offset will you change to achieve this and in what direction?
+            '''
+
+            self.job_queue.append(self.ik_planner.compute_ik(self.joint_state, self.place_pose[0], self.place_pose[1], self.place_pose[2] + 0.185, qx=self.place_pose[3], qy=self.place_pose[4], qz=self.place_pose[5], qw=self.place_pose[6]))
+            # 6) Release the gripper
+            self.job_queue.append('toggle_grip')
 
         self.execute_jobs()
-
+        self.currently_picking = False
 
     def execute_jobs(self):
         if not self.job_queue:
