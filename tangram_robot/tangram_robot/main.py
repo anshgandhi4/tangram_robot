@@ -80,9 +80,9 @@ class PickAndPlace(Node):
                 self.get_logger().info(f'skipping pick place for {i}')
                 continue
 
-            # NOTE: WE FIXED THE Z VALUES TO ZERO BECAUSE IT ALWAYS WORKS. THE ARUCO DETECTION IS NOISY SO THE Z VALUE DERIVED FROM THAT IS COOKED TOO
-            self.pick_pose = (pick_pose.position.x, pick_pose.position.y, 0, pick_pose.orientation.x, pick_pose.orientation.y, pick_pose.orientation.z, pick_pose.orientation.w)
-            self.place_pose = (place_pose.position.x, place_pose.position.y, 0, place_pose.orientation.x, place_pose.orientation.y, place_pose.orientation.z, place_pose.orientation.w)
+            # NOTE: WE FIXED THE Z VALUES TO THE CONSTANT BECAUSE IT ALWAYS WORKS. THE ARUCO DETECTION IS NOISY SO THE Z VALUE DERIVED FROM THAT IS COOKED TOO
+            self.pick_pose = (pick_pose.position.x, pick_pose.position.y, 0.028, pick_pose.orientation.x, pick_pose.orientation.y, pick_pose.orientation.z, pick_pose.orientation.w)
+            self.place_pose = (place_pose.position.x, place_pose.position.y, 0.028, place_pose.orientation.x, place_pose.orientation.y, place_pose.orientation.z, place_pose.orientation.w)
 
             self.get_logger().info(f'pick pose: {self.pick_pose[:3]}')
             self.get_logger().info(f'place pose: {self.place_pose[:3]}')

@@ -100,6 +100,7 @@ class RealSenseSubscriber(Node):
                 if piece.color != 'green':
                     continue
 
+                # TODO: NEED TO UNCOMMENT THIS
                 piece.pose = np.array([0.0, 0.0, 0.0])
 
                 z_axis_quat = self.z_axis_rot(piece.pose[2] + np.pi)
