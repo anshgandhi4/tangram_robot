@@ -45,9 +45,21 @@ source install/setup.bash
 ros2 run tangram_robot main
 ```
 
+## aliases
+
+`d`: `distrobox enter ros2 -- bash`
+`s`: `source install/setup.bash`
+`b`: `colcon build --symlink-install && s`
+`start_arm`: `ros2 run ur7e_utils enable_comms`
+`estop`: `ros2 run ur7e_utils reset_state`
+`freedrive`: `ros2 run ur7e_utils freedrive`
+`tuck`: `ros2 run ur7e_utils tuck`
+
 ## packages
 
-* `perception`: filter pointcloud
+* `perception`: basically ros2 wrapper of `parse_images`, goes from camera to published tangram poses
 * `planning`: determine cube pose, unify TF tree, run IK
 * `ros2_aruco`: determine camera pose relative to aruco marker
+* `scrape_dataset`: webscrape sample tangram images from web and process them, processing code also works for real images
+* `tangram-vlm`: vlm code to generate tangram plan based on text prompt
 * `tangram_robot`: full pick and place pipeline
