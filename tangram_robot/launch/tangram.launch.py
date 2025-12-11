@@ -29,8 +29,8 @@ def generate_launch_description():
     # Perception node
     perception_node = Node(
         package='perception',
-        executable='process_pointcloud',
-        name='process_pointcloud',
+        executable='process_camera',
+        name='process_camera',
         output='screen'
     )
 
