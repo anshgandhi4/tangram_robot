@@ -45,16 +45,6 @@ def generate_launch_description():
         )
     )
 
-    aruco_launch_table = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(
-                get_package_share_directory('ros2_aruco'),
-                'launch',
-                'aruco_recognition_table.launch.py'
-            )
-        )
-    )
-
     ar_marker_launch_arg = DeclareLaunchArgument(
         'ar_marker',
         default_value='ar_marker_8'
@@ -134,12 +124,11 @@ def generate_launch_description():
         ar_marker_launch_arg,
         realsense_launch,
         aruco_launch,
-        # aruco_launch_table,
         perception_node,
-        planning_tf_node,
-        planning_ik_node,
-        transform_cube_pose_node,
-        static_base_world,
-        moveit_launch,
-        shutdown_on_any_exit
+        # planning_tf_node,
+        # planning_ik_node,
+        # transform_cube_pose_node,
+        # static_base_world,
+        # moveit_launch,
+        # shutdown_on_any_exit
     ])

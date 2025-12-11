@@ -78,6 +78,7 @@ class Tangram:
     def __init__(self, pieces=None, prompt=None):
         self.pieces = pieces if pieces is not None else []
         self.prompt = prompt if prompt is not None else ''
+        self.meters = False
 
     def __str__(self):
         return f'Tangram(pieces={self.pieces}, prompt={self.prompt})'
@@ -99,17 +100,20 @@ class Tangram:
                 angle = np.arccos(np.dot(s2, s0) / (s2_mag * s0_mag))
                 return (s2_mag > s0_mag) == (angle < 0.5 * np.pi)
 
-    def process(self, image_y):
+    def process(self, image_y, enable_flip=True):
         # sizes = ['small', 'small', 'medium', 'large', 'large']
         # triangles = [(piece, i) for i, piece in enumerate(self.pieces) if 'triangle' in piece.shape]
         # sorted_indices = np.argsort([triangle.area for triangle, _ in triangles])
         # for idx, i in enumerate(sorted_indices):
         #     self.pieces[triangles[i][1]].shape = f'{sizes[idx]} triangle'
 
-        flip = self.parallelogram_flip_required()
-        if flip:
-            for piece in self.pieces:
-                piece.reflect_image(image_y)
+        if enable_flip:
+            flip = self.parallelogram_flip_required()
+            if flip:
+                for piece in self.pieces:
+                    piece.reflect_image(image_y)
+        else:
+            flip = False
 
         for piece in self.pieces:
             piece.pose = piece.calculate_pose()

@@ -250,7 +250,7 @@ def extract_corners_from_image(rgb_image, node=None):
         master_mask = cv2.bitwise_or(master_mask, mask)
 
     # process tangram
-    flip = tangram.process(img.shape[1])
+    flip = tangram.process(img.shape[1], enable_flip=True)
     if DEBUG and flip:
         img = np.ascontiguousarray(np.flip(img, axis=1))
 
