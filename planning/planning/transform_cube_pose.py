@@ -17,30 +17,8 @@ class TransformCubePose(Node):
 
         self.cube_pose_sub = self.create_subscription(PointStamped, '/tangram/pick_0_pose', self.tangram_tf_publish, 10)
         # self.cube_pose_sub = self.create_subscription(PointStamped, '/tangram/place_0_pose', self.tangram_tf_publish, 10)
-        self.cube_pose_pub = self.create_publisher(PoseStamped, '/transformed_cube_pose', 10)
-
-        self.create_timer(0.01, self.tf_test)
 
         rclpy.spin_once(self, timeout_sec=2)
-        self.targ_pose = None
-
-    def tf_test(self):
-        target_pose = self.target_poses[0]
-
-        transformed = PoseStamped()
-        transformed.header.frame_id = 'base_link'
-        transformed.pose.position.x = target_pose[0]
-        transformed.pose.position.y = target_pose[1]
-        transformed.pose.position.z = -0.12
-
-
-        theta = target_pose[2]
-        transformed.pose.orientation.x = (1/np.sqrt(2)) * np.cos(theta/2)
-        transformed.pose.orientation.y = -(1/np.sqrt(2))
-        transformed.pose.orientation.z = 0.0
-        transformed.pose.orientation.w = (1/np.sqrt(2)) *np.sin(theta/2)
-
-        self.cube_pose_pub.publish(transformed)
 
     def tangram_tf_publish(self, msg):
         target_pose = self.target_poses[0]
@@ -49,8 +27,7 @@ class TransformCubePose(Node):
         transformed.header.frame_id = 'base_link'
         transformed.pose.position.x = target_pose[0]
         transformed.pose.position.y = target_pose[1]
-        transformed.pose.position.z = -0.12
-
+        transformed.pose.position.z = 0.04
 
         theta = target_pose[2]
         transformed.pose.orientation.x = (1/np.sqrt(2)) * np.cos(theta/2)
@@ -59,12 +36,6 @@ class TransformCubePose(Node):
         transformed.pose.orientation.w = (1/np.sqrt(2)) *np.sin(theta/2)
 
         self.cube_pose_pub.publish(transformed)
-
-    def targ_pose_callback(self, msg):
-        if self.targ_pose is None:
-            self.targ_pose = self.transform_cube_pose(msg)
-
-        self.cube_pose_pub.publish(self.cube_pose)
 
     def transform_cube_pose(self, msg):
         """ 

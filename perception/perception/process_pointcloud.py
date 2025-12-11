@@ -35,6 +35,10 @@ class RealSenseSubscriber(Node):
 
         self.rand = [0.0] * 7#[0.0, np.pi/2, np.pi/4, -np.pi/4, np.pi/6, -np.pi/6, np.pi/3]
 
+        self.base_rot = np.array([[-1, 0, 0],
+                                  [0, 1, 0],
+                                  [0, 0, -1]])
+
         self.cam_sub = self.create_subscription(Image, '/camera/camera/color/image_raw', self.image_callback, 1)
         self.bridge = CvBridge()
 
@@ -53,32 +57,37 @@ class RealSenseSubscriber(Node):
                 pick_pose.header = msg.header
                 pick_pose.pose.position.x = 0.12
                 pick_pose.pose.position.y = 0.61
-                pick_pose.pose.position.z = -0.115
+                pick_pose.pose.position.z = 0.12
 
-                rot_mat_y_axis = np.array([[np.cos(theta), 0, -np.sin(theta)],
-                                           [0,             -1, 0            ],
-                                           [np.sin(theta),0, np.cos(theta)]])
-                quaternion = R.from_matrix(rot_mat_y_axis).as_quat()
+                rot_mat_z_axis = np.array([[np.cos(theta), -np.sin(theta), 0],
+                                           [np.sin(theta),  np.cos(theta), 0],
+                                           [0,              0,             1]])
 
-                # pick_pose.pose.orientation.x = quaternion[0]
-                # pick_pose.pose.orientation.y = quaternion[1]
-                # pick_pose.pose.orientation.z = quaternion[2]
-                # pick_pose.pose.orientation.w = quaternion[3]
-                pick_pose.pose.orientation.y = -1.0
+                quaternion = R.from_matrix(self.base_rot @ rot_mat_z_axis).as_quat()
+
+                pick_pose.pose.orientation.x = quaternion[0]
+                pick_pose.pose.orientation.y = quaternion[1]
+                pick_pose.pose.orientation.z = quaternion[2]
+                pick_pose.pose.orientation.w = quaternion[3]
+                # pick_pose.pose.orientation.y = 1.0
+                # pick_pose.pose.orientation.w = 0.0
                 self.pick_publishers[p].publish(pick_pose)
 
                 place_pose = pick_pose
                 place_pose.pose.position.x *= -1
                 theta = self.rand[(p + 1) % 7]
-                rot_mat_y_axis = np.array([[np.cos(theta), 0, -np.sin(theta)],
-                                           [0,             -1, 0            ],
-                                           [np.sin(theta),0, np.cos(theta)]])
-                quaternion = R.from_matrix(rot_mat_y_axis).as_quat()
-                # place_pose.pose.orientation.x = quaternion[0]
-                # place_pose.pose.orientation.y = quaternion[1]
-                # place_pose.pose.orientation.z = quaternion[2]
-                # place_pose.pose.orientation.w = quaternion[3]
-                pick_pose.pose.orientation.y = -1.0
+
+                rot_mat_z_axis = np.array([[np.cos(theta), -np.sin(theta), 0],
+                                           [np.sin(theta),  np.cos(theta), 0],
+                                           [0,              0,             1]])
+
+                quaternion = R.from_matrix(self.base_rot @ rot_mat_z_axis).as_quat()
+                place_pose.pose.orientation.x = quaternion[0]
+                place_pose.pose.orientation.y = quaternion[1]
+                place_pose.pose.orientation.z = quaternion[2]
+                place_pose.pose.orientation.w = quaternion[3]
+                # place_pose.pose.orientation.y = 1.0
+                # place_pose.pose.orientation.w = 0.0
                 self.place_publishers[p].publish(place_pose)
 
 def main(args=None):
