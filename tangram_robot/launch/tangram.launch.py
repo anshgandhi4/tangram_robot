@@ -125,10 +125,10 @@ def generate_launch_description():
         realsense_launch,
         aruco_launch,
         perception_node,
-        # planning_tf_node,
-        # planning_ik_node,
-        # transform_cube_pose_node,
-        # static_base_world,
-        # moveit_launch,
+        planning_tf_node,
+        planning_ik_node,
+        transform_cube_pose_node,
+        static_base_world,
+        moveit_launch,
         shutdown_on_any_exit
     ])

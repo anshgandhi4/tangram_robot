@@ -15,11 +15,11 @@ class PickAndPlace(Node):
 
         self.pick_subs = []
         for i in range(7):
-            self.pick_subs.append(self.create_subscription(PoseStamped, f'/tangram/pick_{i}_pose', lambda x: self.pick_callback(x, i), 1))
+            self.pick_subs.append(self.create_subscription(PoseStamped, f'/tangram/pick_{i}_pose', lambda x, i=i: self.pick_callback(x, i), 1))
 
         self.place_subs = []
         for i in range(7):
-            self.place_subs.append(self.create_subscription(PoseStamped, f'/tangram/place_{i}_pose', lambda x: self.place_callback(x, i), 1))
+            self.place_subs.append(self.create_subscription(PoseStamped, f'/tangram/place_{i}_pose', lambda x, i=i: self.place_callback(x, i), 1))
 
         self.tangrams = [[None, None] for _ in range(7)]
 
@@ -42,6 +42,8 @@ class PickAndPlace(Node):
 
         # Entries should be of type either JointState or String('toggle_grip')
         self.job_queue = []
+
+        self.get_logger().info('pick and place is gonna start in 10 seconds rip') # REDUCE BY CHANGING THE TIMER
 
     def joint_state_callback(self, msg: JointState):
         self.joint_state = msg
@@ -74,6 +76,9 @@ class PickAndPlace(Node):
 
             self.pick_pose = (pick_pose.position.x, pick_pose.position.y - 0.035, pick_pose.position.z, pick_pose.orientation.x, pick_pose.orientation.y, pick_pose.orientation.z, pick_pose.orientation.w)
             self.place_pose = (place_pose.position.x, place_pose.position.y - 0.035, place_pose.position.z, place_pose.orientation.x, place_pose.orientation.y, place_pose.orientation.z, place_pose.orientation.w)
+
+            self.get_logger().info(f'pick pose: {self.pick_pose[:3]}')
+            self.get_logger().info(f'place pose: {self.place_pose[:3]}')
 
             # 1) move to pre-pick position (pick + some z offset)
             self.job_queue.append(self.ik_planner.compute_ik(self.joint_state, self.pick_pose[0], self.pick_pose[1], self.pick_pose[2] + 0.03, qx=self.pick_pose[3], qy=self.pick_pose[4], qz=self.pick_pose[5], qw=self.pick_pose[6]))
