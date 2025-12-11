@@ -9,6 +9,7 @@ import base64
 import asyncio
 import json
 import shapely.geometry as sg
+import json
 
 class Polygon:
     def __init__(self, name, center_x, center_y, offsets, color=(255, 255, 255)):
@@ -19,7 +20,8 @@ class Polygon:
         self.center_x = self._start_center_x
         self.center_y = self._start_center_y
 
-        assert sum([offset[0] for offset in offsets]) == 0 == sum([offset[1] for offset in offsets])
+        assert abs(sum([offset[0] for offset in offsets])) < 1e-5
+        assert abs(sum([offset[1] for offset in offsets])) < 1e-5
         self.true_offsets = offsets
         self.start_angle = 0
 
@@ -61,6 +63,7 @@ class RightTriangle(Polygon):
         super().__init__(name, center_x, center_y, offsets, color)
         self.rotate(angle)
 
+state_lock = threading.Lock()
 
 class WindowManager:
     def __init__(self, window):
@@ -89,25 +92,49 @@ class WindowManager:
                 return True
         print(f"Warning: Polygon {name} not found for rotation.")
         return False
-    
-    def intersections(self, name):
-        # Find the polygon by name
-        target_polygon = None
-        for polygon in self.polygons:
-            if polygon.name == name:
-                target_polygon = polygon
-                break
-        if target_polygon is None:
-             return f"Polygon {name} not found."
-        
-        polygon_shape = sg.Polygon([(pt[0], pt[1]) for pt in target_polygon.points])
-        for polygon in self.polygons:
-            if polygon.name != name:
-                polygon_shape2 = sg.Polygon([(pt[0], pt[1]) for pt in polygon.points])
+
+    def intersections(self):
+        return_json = {
+            "has_intersection": False,
+            "intersections": []
+        }
+        for ind, polygon in enumerate(self.polygons):
+            polygon_shape = sg.Polygon([(pt[0], pt[1]) for pt in polygon.points])
+
+            for polygon2 in self.polygons[ind + 1:]:
+                polygon_shape2 = sg.Polygon([(pt[0], pt[1]) for pt in polygon2.points])
                 intersection = polygon_shape.intersection(polygon_shape2)
-                if intersection.area > 5:
-                    return f"Intersection found between {name} and {polygon.name}"
-        return "No intersections found."
+                if intersection.area > 5 and len(return_json["intersections"]) < 5:
+                    return_json["has_intersection"] = True
+                    return_json["intersections"].append({
+                        "polygon1": polygon.name,
+                        "polygon2": polygon2.name,
+                        "intersection_area": intersection.area
+                    })
+
+        return json.dumps(return_json)
+
+    def min_distances(self, dist=10):
+        return_json = {
+            "too_close": False,
+            "distances": []
+        }
+
+        for ind, polygon in enumerate(self.polygons):
+            polygon_shape = sg.Polygon([(pt[0], pt[1]) for pt in polygon.points])
+
+            for polygon2 in self.polygons[ind + 1:]:
+                polygon_shape2 = sg.Polygon([(pt[0], pt[1]) for pt in polygon2.points])
+                min_distance = polygon_shape.distance(polygon_shape2)
+                if min_distance < 5 and len(return_json["distances"]) < 5:
+                    return_json["too_close"] = True
+                    return_json["distances"].append({
+                        "polygon1": polygon.name,
+                        "polygon2": polygon2.name,
+                        "min_distance": min_distance
+                    })
+
+        return json.dumps(return_json)
 
     def get_all_points(self):
         return {polygon.name: [{"x": pt[0], "y": pt[1]} for pt in polygon.points] for polygon in self.polygons}
@@ -164,7 +191,8 @@ def pygame_step():
             return False
 
     window.fill((10, 10, 10))
-    window_manager.draw_polygons()
+    with state_lock:
+        window_manager.draw_polygons()
     pygame.display.flip()
     clock.tick(60)
     return True
@@ -177,21 +205,30 @@ mcp = FastMCP("shape_tools")
 async def move_polygon(name: str, dx: float, dy: float) -> bool:
     """Moves a polygon by dx, dy."""
     await asyncio.sleep(1)
-    result = window_manager.move_polygon(name, dx, dy)
+    with state_lock:
+        result = window_manager.move_polygon(name, dx, dy)
     return result
 
 @mcp.tool()
 async def rotate_polygon(name: str, angle: float) -> bool:
     """Rotates a polygon by angle radians."""
     await asyncio.sleep(1)
-    result = window_manager.rotate_polygon(name, angle)
+    with state_lock:
+        result = window_manager.rotate_polygon(name, angle)
     return result
 
 @mcp.tool()
-async def intersections(name: str) -> str:
-    """Checks if a polygon intersects with any other polygon."""
+async def intersections():
+    """Checks for all intersections between any two polygons."""
     await asyncio.sleep(1)
-    result = window_manager.intersections(name)
+    result = window_manager.intersections()
+    return result
+
+@mcp.tool()
+async def too_close():
+    """Checks for all intersections between any two polygons."""
+    await asyncio.sleep(1)
+    result = window_manager.min_distances(4)
     return result
 
 @mcp.tool()
