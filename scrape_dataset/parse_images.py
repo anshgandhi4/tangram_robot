@@ -5,21 +5,15 @@ from pathlib import Path
 
 from tangram import Piece, Tangram
 
-def rectify(image, rect_pts, rect_size=(100, 100), center_pos=(100, 100), output_size=(500, 500)):
-    """
-    triangle_pts: list or array of 3 points (x,y) in any order
-    output_size: (W, H) of output rectangle
-    """
-    pts = np.array(rect_pts, dtype=np.float32)
+def rectify(image, rect_pts, tag_size=100, center_pos=(100, 100), output_size=(500, 500)):
+    pts = np.array(rect_pts[::-1], dtype=np.float32)
 
-    w, h = rect_size
-    centx, centy = center_pos
-    dst = np.array([
-        [centx, centy],
-        [centx, centy+h-1],
-        [centx+w-1, centy+h-1],
-        [centx+w-1, centy]
-    ], dtype=np.float32)
+    d = tag_size - 1
+    x, y = center_pos
+    dst = np.array([[x,     y + d],
+                    [x + d, y + d],
+                    [x + d, y],
+                    [x,     y]], dtype=np.float32)
 
     H, _ = cv2.findHomography(pts, dst, cv2.RANSAC, 3.0)
     rectified = cv2.warpPerspective(image, H, output_size)
@@ -39,8 +33,12 @@ def extract_corners_from_image(rgb_image, node=None):
         aruco_img = cv2.cvtColor(img, cv2.COLOR_HSV2BGR)
 
         # Create ArUco dictionary and detector parameters (4x4 tags)
-        aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_5X5_250)
-        aruco_params = cv2.aruco.DetectorParameters_create()
+        if int(cv2.__version__.split('.')[1]) >= 7: # 4._.0
+            aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+            aruco_params = cv2.aruco.DetectorParameters()
+        else:
+            aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_5X5_250)
+            aruco_params = cv2.aruco.DetectorParameters_create()
 
         # Generate 3D positions for all of the tags
         tag_size = 0.06
@@ -53,13 +51,11 @@ def extract_corners_from_image(rgb_image, node=None):
             tag_position_mapping.append(tag_pos)
 
         # Detect ArUco markers in an image
-        # Returns: corners (list of numpy arrays), ids (numpy array)
-        # detector = cv2.aruco.ArucoDetector(aruco_dict, aruco_params)
-        # corners, _, _ = detector.detectMarkers(aruco_img)
         # node.get_logger().info('detecting aruco')
-        corners, _, _ = cv2.aruco.detectMarkers(
-            aruco_img, aruco_dict, parameters=aruco_params
-        )
+        if int(cv2.__version__.split('.')[1]) >= 7: # 4._.0
+            corners, _, _ = cv2.aruco.ArucoDetector(aruco_dict, aruco_params).detectMarkers(aruco_img)
+        else:
+            corners, _, _ = cv2.aruco.detectMarkers(aruco_img, aruco_dict, parameters=aruco_params)
         # node.get_logger().info('detected aruco')
 
         found_four = False
@@ -70,7 +66,7 @@ def extract_corners_from_image(rgb_image, node=None):
                 break
 
         if found_four:
-            img, _ = rectify(aruco_img, corners, rect_size=(50,50), center_pos=(aruco_img.shape[1]//2, aruco_img.shape[0]//2), output_size=(aruco_img.shape[1], aruco_img.shape[0]))
+            img, _ = rectify(aruco_img, corners, rect_size=50, center_pos=(aruco_img.shape[1]//2, aruco_img.shape[0]//2), output_size=(aruco_img.shape[1], aruco_img.shape[0]))
             img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
             for corner in corners:
