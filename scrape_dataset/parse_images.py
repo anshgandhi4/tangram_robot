@@ -145,7 +145,7 @@ def extract_corners_from_image(rgb_image, node=None):
                   (np.array([24, 117, 208]),  np.array([31, 255, 255]),  'yellow'),
                   (np.array([121, 47, 193]),  np.array([127, 101, 245]), 'purple'),
                   (np.array([162, 154, 179]), np.array([173, 203, 236]), 'hot pink'),
-                  (np.array([0, 199, 165]),   np.array([11, 242, 216]),  'red')]
+                  ((np.array([0, 134, 151]), np.array([176, 144, 143])), (np.array([3, 201, 173]), np.array([179, 199, 174])), 'red')]
     else:
         # get count of all non-gray colors present in image
         color_counter = Counter([tuple(pixel) for row in img for pixel in row if pixel[1] != 0])
@@ -162,7 +162,13 @@ def extract_corners_from_image(rgb_image, node=None):
         # node.get_logger().info(f'processing {color_name}')
         # generate image mask
         if REAL:
-            mask = cv2.inRange(img, lower, upper)
+            if color_name == 'red':
+                mask = cv2.inRange(img, lower[0], upper[0])
+                mask2 = cv2.inRange(img, lower[1], upper[1])
+                mask = cv2.bitwise_or(mask, mask2)
+            else:
+                mask = cv2.inRange(img, lower, upper)
+
             mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, (25, 25))
         else:
             mask = np.all(img == lower, axis=-1).astype(np.uint8) * 255
