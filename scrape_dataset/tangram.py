@@ -51,7 +51,7 @@ class Piece:
             if abs(angle - 0.5 * np.pi) < 0.2:
                 theta = np.arctan2(s2[1], s2[0])
             elif s2_mag > s0_mag:
-                theta = np.arctan2(s0[1], s0[0])
+                theta = np.arctan2(-s0[1], -s0[0])
             else:
                 s1 = self.coords[2] - self.coords[0]
                 theta = np.arctan2(s1[1], s1[0])

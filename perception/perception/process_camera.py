@@ -42,14 +42,21 @@ class RealSenseSubscriber(Node):
         self.static_cam_to_ar0 = None
 
         self.timer = self.create_timer(1, self.publish_pick_poses)
-        # self.static_timer = self.create_timer(0.5, self.broadcast_static_transforms)
+        self.transform_timer = self.create_timer(0.05, self.broadcast_static_transforms)
         self.process_image_lock = False
 
     def broadcast_static_transforms(self):
+        # this function broadcasts 2 transforms:
+        #   1. camera_link -> aruco marker_{marker_id}
+        #   2. camera_link -> aruco marker_0 (table aruco)
+        if self.static_base_to_cam is None:
+            self.get_logger().info('Our static transforms are NONE!!!')
         if self.static_base_to_cam is not None:
+            self.static_base_to_cam.header.stamp = self.get_clock().now().to_msg()
             self.static_broadcaster.sendTransform(self.static_base_to_cam)
             self.get_logger().info('Broadcasting static transforms...')
         if self.static_cam_to_ar0 is not None:
+            self.static_cam_to_ar0.header.stamp = self.get_clock().now().to_msg()
             self.static_broadcaster.sendTransform(self.static_cam_to_ar0)
             self.get_logger().info('Broadcasting static transforms...')
 
@@ -94,6 +101,7 @@ class RealSenseSubscriber(Node):
     def publish_pick_poses(self):
         for color in self.piece_transforms:
             if self.piece_transforms[color] is not None:
+                self.get_logger().info(f'Publishing pick pose for {color}')
                 self.pick_publishers[list(self.piece_transforms.keys()).index(color)].publish(self.piece_transforms[color])
 
     def image_callback(self, msg):
@@ -131,21 +139,27 @@ class RealSenseSubscriber(Node):
 
             try:
                 transform = self.tf_buffer.lookup_transform('base_link', f'tangram_pick_{p_col}', rclpy.time.Time()).transform
-                if self.num_frames == 1:
-                    base_to_cam_transform = self.tf_buffer.lookup_transform('ar_marker_8', 'camera_link', rclpy.time.Time()).transform
-                    base_to_ar0 = self.tf_buffer.lookup_transform('camera_link', 'ar_marker_0', rclpy.time.Time()).transform
+                if self.num_frames <= 1000:
+                    self.get_logger().info(f'within first {self.num_frames} frames, setting static transforms')
+                    base_to_cam_transform = self.tf_buffer.lookup_transform('ar_marker_8', 'camera_link', rclpy.time.Time())
+                    base_to_ar0 = self.tf_buffer.lookup_transform('camera_link', 'ar_marker_0', rclpy.time.Time())
 
-                    self.static_base_to_cam = base_to_cam_transform
-                    self.static_cam_to_ar0 = base_to_ar0
+                    if base_to_cam_transform is not None:
+                        self.get_logger().info('NOT NOOOOONONONONEONOENOEN')
+                        self.static_base_to_cam = base_to_cam_transform
 
-                    self.static_broadcaster.sendTransform(base_to_cam_transform)
-                    self.static_broadcaster.sendTransform(base_to_ar0)
+                    if base_to_ar0 is not None:
+                        self.get_logger().info('NOT NOOOOONONONONEONOENOEN')
+                        self.static_cam_to_ar0 = base_to_ar0
+                    # self.static_broadcaster.sendTransform(base_to_cam_transform)
+                    # self.static_broadcaster.sendTransform(base_to_ar0)
+                    # self.get_logger().info('Static transforms set and broadcasted.')
                     
             except:
                 self.get_logger().info('still waiting for buffer transform')
                 continue
 
-            if self.piece_transforms[p_col] is not None and self.num_frames > 200:
+            if self.piece_transforms[p_col] is not None and self.num_frames > 100000:
                 pick_pose = self.piece_transforms[p_col]
             else:
                 # self.base_to_cam = self.tf_buffer.lookup_transform('base_link', 'camera_link', rclpy.time.Time()).transform

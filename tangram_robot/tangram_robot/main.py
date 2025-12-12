@@ -73,8 +73,8 @@ class PickAndPlace(Node):
         self.get_logger().info(f'picking')
         self.currently_picking = True # DO NOT MOVE THIS, WEIRD THINGS HAPPEN IF REMOVED (TREAT THIS AS A LOCK FOR THE JOB QUEUE)
         # TODO: UNDO THIS
-        # for i in range(len(self.tangrams)):
-        for i in [0]:
+        for i in range(len(self.tangrams)):
+        # for i in [1]:
             pick_pose = self.tangrams[i][0]
             place_pose = self.tangrams[i][1]
 
@@ -85,8 +85,8 @@ class PickAndPlace(Node):
             current_job_queue = []
 
             # NOTE: WE FIXED THE Z VALUES TO THE CONSTANT BECAUSE IT ALWAYS WORKS. THE ARUCO DETECTION IS NOISY SO THE Z VALUE DERIVED FROM THAT IS COOKED TOO
-            self.pick_pose = (pick_pose.position.x, pick_pose.position.y, 0.035, pick_pose.orientation.x, pick_pose.orientation.y, pick_pose.orientation.z, pick_pose.orientation.w)
-            self.place_pose = (place_pose.position.x, place_pose.position.y, 0.035, place_pose.orientation.x, place_pose.orientation.y, place_pose.orientation.z, place_pose.orientation.w)
+            self.pick_pose = (pick_pose.position.x, pick_pose.position.y, 0.0325 - 0.005*pick_pose.position.y, pick_pose.orientation.x, pick_pose.orientation.y, pick_pose.orientation.z, pick_pose.orientation.w)
+            self.place_pose = (place_pose.position.x, place_pose.position.y, 0.0325, place_pose.orientation.x, place_pose.orientation.y, place_pose.orientation.z, place_pose.orientation.w)
 
             self.get_logger().info(f'pick pose: {self.pick_pose[:3]}')
             self.get_logger().info(f'place pose: {self.place_pose[:3]}')
@@ -142,8 +142,8 @@ class PickAndPlace(Node):
             self.job_queue.extend(current_job_queue)
 
         self.execute_jobs()
-        self.job_queue = []
-        self.currently_picking = False
+        # self.job_queue = []
+        # self.currently_picking = False
 
     def execute_jobs(self):
         if not self.job_queue:

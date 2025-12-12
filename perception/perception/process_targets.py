@@ -74,12 +74,13 @@ class TargetProcessor(Node):
 
         self.num_frames += 1
         ARUCO_RATIO = None
-        RIGHT_BUFFER = 0.6
+        RIGHT_BUFFER = 0.55
+        UP_BUFFER = 0.08
         for piece in tangram.pieces:
             if piece.shape == 'square':
                 piece.coords = piece.coords.astype(np.float32)
                 # TODO: ADDING EXTRA TOLERANCE HERE
-                ARUCO_RATIO = 1.1 * 0.1016 / np.linalg.norm(piece.coords[0] - piece.coords[1])
+                ARUCO_RATIO = 1.05 * 0.1016 / np.linalg.norm(piece.coords[0] - piece.coords[1])
 
         if ARUCO_RATIO is None:
             return
@@ -89,7 +90,8 @@ class TargetProcessor(Node):
             piece.color = self.pixel_to_color[piece.color]
 
             piece.pose[0] = float(piece.pose[0] - img.shape[1] // 2) * ARUCO_RATIO + RIGHT_BUFFER
-            piece.pose[1] = float(img.shape[0] // 2 - piece.pose[1]) * ARUCO_RATIO
+            piece.pose[1] = float(img.shape[0] // 2 - piece.pose[1]) * ARUCO_RATIO + UP_BUFFER
+            piece.pose[2] = piece.pose[2] + np.pi
 
         tangram.sort_by_color()
         self.tangram = tangram
