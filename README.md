@@ -25,7 +25,7 @@ pip install -r ~/ros2_ws/src/requirements.txt
 ```bash
 cd src
 git clone https://github.com/AntonioMacaronio/sam3.git
-pip install requests
+pip install requests Pillow
 ```
 
 ## run code

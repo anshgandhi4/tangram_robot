@@ -34,6 +34,14 @@ def generate_launch_description():
         output='screen'
     )
 
+    # Place Location
+    place_location_node = Node(
+        package='perception',
+        executable='process_targets',
+        name='process_targets',
+        output='screen'
+    )
+
     # ArUco recognition
     aruco_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -67,14 +75,6 @@ def generate_launch_description():
         package='planning',
         executable='ik',
         name='ik_node',
-        output='screen'
-    )
-
-    # Transform cube pose node
-    transform_cube_pose_node = Node(
-        package='planning',
-        executable='transform_cube_pose',
-        name='transform_cube_pose_node',
         output='screen'
     )
 
@@ -125,10 +125,10 @@ def generate_launch_description():
         realsense_launch,
         aruco_launch,
         perception_node,
+        place_location_node,
         planning_tf_node,
         planning_ik_node,
-        transform_cube_pose_node,
         static_base_world,
         moveit_launch,
-        # shutdown_on_any_exit
+        shutdown_on_any_exit
     ])

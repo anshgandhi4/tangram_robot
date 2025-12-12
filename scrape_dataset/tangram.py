@@ -3,7 +3,10 @@ import numpy as np
 class Piece:
     def __init__(self, coords, color):
         self.coords = coords
-        self.color = color
+        if type(color) is not str:
+            self.color = tuple(color)
+        else:
+            self.color = color
         self.shape = self.classify_shape()
         self.area = self.calculate_area()
         self.pose = None
@@ -100,6 +103,9 @@ class Tangram:
                 angle = np.arccos(np.dot(s2, s0) / (s2_mag * s0_mag))
                 return (s2_mag > s0_mag) == (angle < 0.5 * np.pi)
 
+    def sort_by_color(self):
+        self.pieces.sort(key=lambda piece: piece.color)
+
     def process(self, image_y, enable_flip=True):
         # sizes = ['small', 'small', 'medium', 'large', 'large']
         # triangles = [(piece, i) for i, piece in enumerate(self.pieces) if 'triangle' in piece.shape]
@@ -118,6 +124,7 @@ class Tangram:
         for piece in self.pieces:
             piece.pose = piece.calculate_pose()
 
-        self.pieces.sort(key=lambda piece: piece.color)
+        if type(self.pieces[0].color) == str:
+            self.sort_by_color()
 
         return flip

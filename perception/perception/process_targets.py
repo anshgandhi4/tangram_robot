@@ -1,11 +1,10 @@
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Image
 from geometry_msgs.msg import PoseStamped, TransformStamped
 import numpy as np
-from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation as R
 from tf2_ros import Buffer, TransformListener, TransformBroadcaster
+from PIL import Image
 
 import sys
 sys.path.append('src')
@@ -13,48 +12,31 @@ sys.path.append('src/scrape_dataset')
 
 from scrape_dataset.parse_images import extract_corners_from_image
 
-class RealSenseSubscriber(Node):
+class TargetProcessor(Node):
     def __init__(self):
-        super().__init__('realsense_subscriber')
+        super().__init__('target_processor')
 
-        self.pick_publishers = []
+        self.place_publishers = []
         for i in range(7):
-            pub = self.create_publisher(PoseStamped, f'/tangram/pick_{i}_pose', 1)
-            self.pick_publishers.append(pub)
-
-        self.rect_pub = self.create_publisher(Image, '/tangram/rectified_image', 1)
-        self.masked_pub = self.create_publisher(Image, '/tangram/masked_image', 1)
-        self.output_pub = self.create_publisher(Image, '/tangram/output_image', 1)
+            pub = self.create_publisher(PoseStamped, f'/tangram/place_{i}_pose', 1)
+            self.place_publishers.append(pub)
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.tf_broadcaster = TransformBroadcaster(self)
 
-        self.cam_sub = self.create_subscription(Image, '/camera/camera/color/image_raw', self.image_callback, 1)
-        self.bridge = CvBridge()
-
         self.piece_transforms = {'blue': None, 'light blue': None, 'green': None, 'yellow': None, 'purple': None, 'hot pink': None, 'red': None}
         self.num_frames = 0
+        self.pixel_to_color = {(164, 100, 255): 'blue', (18, 255, 255): 'light blue', (139, 148, 190): 'green', (102, 255, 255): 'yellow', (60, 255, 255): 'purple', (30, 255, 255): 'hot pink', (0, 228, 255): 'red'}
 
-        self.timer = self.create_timer(1, self.publish_pick_poses)
+        self.timer = self.create_timer(1, self.publish_place_poses)
         self.process_image_lock = False
 
-    def pose_stamped_to_transform_stamped(self, pose, child_frame_id):
-        transform = TransformStamped()
-        transform.header = pose.header
-        transform.child_frame_id = child_frame_id
-        transform.transform.translation.x = pose.pose.position.x
-        transform.transform.translation.y = pose.pose.position.y
-        transform.transform.translation.z = pose.pose.position.z
-        transform.transform.rotation.x = pose.pose.orientation.x
-        transform.transform.rotation.y = pose.pose.orientation.y
-        transform.transform.rotation.z = pose.pose.orientation.z
-        transform.transform.rotation.w = pose.pose.orientation.w
-        return transform
+        self.image_callback(np.array(Image.open('/home/cc/ee106a/fa25/class/ee106a-aek/ros2_ws/src/scrape_dataset/tangrams/tangram-bear-solution-50.png')), 'bear')
 
-    def transform_stamped_to_pose_stamped(self, transform, msg):
+    def transform_stamped_to_pose_stamped(self, transform):
         pose_stamped = PoseStamped()
-        pose_stamped.header = msg.header
+        pose_stamped.header.stamp = self.get_clock().now().to_msg()
         pose_stamped.header.frame_id = 'base_link'
         pose_stamped.pose.position.x = transform.translation.x
         pose_stamped.pose.position.y = transform.translation.y
@@ -76,31 +58,48 @@ class RealSenseSubscriber(Node):
                          [0, 0, -1]]) @ rot_mat
         return R.from_matrix(rot).as_quat()
 
-    def publish_pick_poses(self):
+    def publish_place_poses(self):
         for color in self.piece_transforms:
             if self.piece_transforms[color] is not None:
-                self.pick_publishers[list(self.piece_transforms.keys()).index(color)].publish(self.piece_transforms[color])
+                self.place_publishers[list(self.piece_transforms.keys()).index(color)].publish(self.piece_transforms[color])
 
-    def image_callback(self, msg):
-        tangram = extract_corners_from_image(self.bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8'), self)
+    def image_callback(self, img, prompt):
+        tangram = extract_corners_from_image(img, node=self, REAL=False, ROS_PUB=False, prompt=prompt)
         if tangram is None:
             return
 
-        if len(tangram.pieces) == 0 or not tangram.pieces[0].meters:
+        if len(tangram.pieces) == 0:
             return
 
         self.num_frames += 1
+        ARUCO_RATIO = None
+        RIGHT_BUFFER = 0.05
+        for piece in tangram.pieces:
+            if piece.shape == 'square':
+                ARUCO_RATIO = 0.1016 / np.linalg.norm(piece.coords[0] - piece.coords[1])
+
+        if ARUCO_RATIO is None:
+            return
+
         for p in range(len(tangram.pieces)):
             piece = tangram.pieces[p]
-            p_col = piece.color
+            p_col = self.pixel_to_color[piece.color]
 
+            piece.coords = piece.coords.astype(np.float32)
+            for coord in piece.coords:
+                coord[0] = float(coord[0] - img.shape[1] // 2) * ARUCO_RATIO
+                coord[1] = float(img.shape[0] // 2 - coord[1]) * ARUCO_RATIO + RIGHT_BUFFER
+
+        tangram.sort_by_color()
+
+        for p in range(len(tangram.pieces)):
             z_axis_quat = self.z_axis_rot(piece.pose[2] + np.pi)
             final_quat = self.final_quat(z_axis_quat)
 
             transform_to_marker = TransformStamped()
-            transform_to_marker.header = msg.header
+            transform_to_marker.header.stamp = self.get_clock().now().to_msg()
             transform_to_marker.header.frame_id = 'ar_marker_0'
-            transform_to_marker.child_frame_id = f'tangram_pick_{p_col}'
+            transform_to_marker.child_frame_id = f'tangram_place_{p_col}'
             # NOTE: THESE OFFSETS ARE BASED ON THE TRANSLATION FROM EEF TO WRIST 3
             transform_to_marker.transform.translation.x = float(piece.pose[0]) - 0.066 * np.sin(piece.pose[2])
             transform_to_marker.transform.translation.y = float(piece.pose[1]) - 0.066 * np.cos(piece.pose[2])
@@ -113,20 +112,20 @@ class RealSenseSubscriber(Node):
             self.tf_broadcaster.sendTransform(transform_to_marker)
 
             try:
-                transform = self.tf_buffer.lookup_transform('base_link', f'tangram_pick_{p_col}', rclpy.time.Time()).transform
+                transform = self.tf_buffer.lookup_transform('base_link', f'tangram_place_{p_col}', rclpy.time.Time()).transform
             except:
                 self.get_logger().info('still waiting for buffer transform')
                 continue
 
             if self.piece_transforms[p_col] is not None and self.num_frames > 200:
-                pick_pose = self.piece_transforms[p_col]
+                place_pose = self.piece_transforms[p_col]
             else:
-                pick_pose = self.transform_stamped_to_pose_stamped(transform, msg)
-                self.piece_transforms[p_col] = pick_pose
+                place_pose = self.transform_stamped_to_pose_stamped(transform)
+                self.piece_transforms[p_col] = place_pose
 
 def main(args=None):
     rclpy.init(args=args)
-    node = RealSenseSubscriber()
+    node = TargetProcessor()
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
