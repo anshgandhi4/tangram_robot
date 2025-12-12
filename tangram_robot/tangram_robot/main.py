@@ -88,16 +88,18 @@ class PickAndPlace(Node):
             self.get_logger().info(f'place pose: {self.place_pose[:3]}')
 
             # 1) move to pre-pick position (pick + some z offset)
-            ik = self.ik_planner.compute_ik(self.joint_state, self.pick_pose[0], self.pick_pose[1], self.pick_pose[2] + 0.03, qx=self.pick_pose[3], qy=self.pick_pose[4], qz=self.pick_pose[5], qw=self.pick_pose[6])
+            ik = self.ik_planner.compute_ik(self.joint_state, self.pick_pose[0], self.pick_pose[1], self.pick_pose[2] + 0.03, self.pick_pose[3], self.pick_pose[4], self.pick_pose[5], self.pick_pose[6])
             if ik is None:
                 self.get_logger().error('Failed to compute IK for pick position, skipping this piece')
+                self.job_queue = []
                 continue
             self.job_queue.append(ik)
 
             # 2) lower to pick position
-            ik = self.ik_planner.compute_ik(self.joint_state, self.pick_pose[0], self.pick_pose[1], self.pick_pose[2], qx=self.pick_pose[3], qy=self.pick_pose[4], qz=self.pick_pose[5], qw=self.pick_pose[6])
+            ik = self.ik_planner.compute_ik(self.joint_state, self.pick_pose[0], self.pick_pose[1], self.pick_pose[2], self.pick_pose[3], self.pick_pose[4], self.pick_pose[5], self.pick_pose[6])
             if ik is None:
                 self.get_logger().error('Failed to compute IK for pick position, skipping this piece')
+                self.job_queue = []
                 continue
             self.job_queue.append(ik)
 
@@ -105,23 +107,26 @@ class PickAndPlace(Node):
             self.job_queue.append('toggle_grip')
             
             # 4) move back to pre-pick position
-            ik = self.ik_planner.compute_ik(self.joint_state, self.pick_pose[0], self.pick_pose[1], self.pick_pose[2] + 0.03, qx=self.pick_pose[3], qy=self.pick_pose[4], qz=self.pick_pose[5], qw=self.pick_pose[6])
+            ik = self.ik_planner.compute_ik(self.joint_state, self.pick_pose[0], self.pick_pose[1], self.pick_pose[2] + 0.03, self.pick_pose[3], self.pick_pose[4], self.pick_pose[5], self.pick_pose[6])
             if ik is None:
                 self.get_logger().error('Failed to compute IK for pick position, skipping this piece')
+                self.job_queue = []
                 continue
             self.job_queue.append(ik)
 
             # 5) move to pre-place position
-            ik = self.ik_planner.compute_ik(self.joint_state, self.place_pose[0], self.place_pose[1], self.place_pose[2] + 0.03, qx=self.place_pose[3], qy=self.place_pose[4], qz=self.place_pose[5], qw=self.place_pose[6])
+            ik = self.ik_planner.compute_ik(self.joint_state, self.place_pose[0], self.place_pose[1], self.place_pose[2] + 0.03, self.place_pose[3], self.place_pose[4], self.place_pose[5], self.place_pose[6])
             if ik is None:
                 self.get_logger().error('Failed to compute IK for place position, skipping this piece')
+                self.job_queue = []
                 continue
             self.job_queue.append(ik)
 
             # 6) move to place position
-            ik = self.ik_planner.compute_ik(self.joint_state, self.place_pose[0], self.place_pose[1], self.place_pose[2], qx=self.place_pose[3], qy=self.place_pose[4], qz=self.place_pose[5], qw=self.place_pose[6])
+            ik = self.ik_planner.compute_ik(self.joint_state, self.place_pose[0], self.place_pose[1], self.place_pose[2], self.place_pose[3], self.place_pose[4], self.place_pose[5], self.place_pose[6])
             if ik is None:
                 self.get_logger().error('Failed to compute IK for place position, skipping this piece')
+                self.job_queue = []
                 continue
             self.job_queue.append(ik)
 
@@ -129,20 +134,19 @@ class PickAndPlace(Node):
             self.job_queue.append('toggle_grip')
 
             # 8) move back to pre-place position
-            ik = self.ik_planner.compute_ik(self.joint_state, self.place_pose[0], self.place_pose[1], self.place_pose[2] + 0.03, qx=self.place_pose[3], qy=self.place_pose[4], qz=self.place_pose[5], qw=self.place_pose[6])
+            ik = self.ik_planner.compute_ik(self.joint_state, self.place_pose[0], self.place_pose[1], self.place_pose[2] + 0.03, self.place_pose[3], self.place_pose[4], self.place_pose[5], self.place_pose[6])
             if ik is None:
                 self.get_logger().error('Failed to compute IK for place position, skipping this piece')
+                self.job_queue = []
                 continue
             self.job_queue.append(ik)
 
         self.execute_jobs()
-        # self.currently_picking = False # DO NOT UNCOMMENT THIS!!! THIS LOCK IS RELEASED WHEN JOB QUEUE IS EMPTY
 
     def execute_jobs(self):
         if not self.job_queue:
             self.get_logger().info("All jobs completed.")
             self.currently_picking = False
-            # rclpy.shutdown()
             return
 
         self.get_logger().info(f"Executing job queue, {len(self.job_queue)} jobs remaining.")

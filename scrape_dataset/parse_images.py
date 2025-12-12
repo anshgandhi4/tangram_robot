@@ -5,12 +5,6 @@ from pathlib import Path
 
 from tangram import Piece, Tangram
 
-global rect_final
-global output_final
-global counter
-counter = 0
-rect_final = output_final = None
-
 def rectify(image, rect_pts, tag_size=100, center_pos=(100, 100), output_size=(500, 500)):
     pts = np.array(rect_pts[::-1], dtype=np.float32)
 
@@ -33,9 +27,6 @@ def extract_corners_from_image(rgb_image, node=None):
     ROS_PUB = True
     CENTER = None
     ARUCO_RATIO = None # m / pixel
-    global rect_final
-    global output_final
-    global counter
 
     # read rgb image
     img = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2HSV)
@@ -63,12 +54,10 @@ def extract_corners_from_image(rgb_image, node=None):
             tag_position_mapping.append(tag_pos)
 
         # Detect ArUco markers in an image
-        # node.get_logger().info('detecting aruco')
         if int(cv2.__version__.split('.')[1]) >= 7: # 4._.0
             corners, _, _ = cv2.aruco.ArucoDetector(aruco_dict, aruco_params).detectMarkers(aruco_img)
         else:
             corners, _, _ = cv2.aruco.detectMarkers(aruco_img, aruco_dict, parameters=aruco_params)
-        # node.get_logger().info('detected aruco')
 
         found_four = False
         for cont in corners:
@@ -84,11 +73,7 @@ def extract_corners_from_image(rgb_image, node=None):
             img, _ = rectify(aruco_img, corners, tag_size=TAG_SIZE, center_pos=CENTER, output_size=(aruco_img.shape[1], aruco_img.shape[0]))
 
             if ROS_PUB and node is not None:
-                if rect_final is None or counter < 100:
-                    rect_final = img
-                    counter += 1
-
-                node.rect_pub.publish(node.bridge.cv2_to_imgmsg(rect_final, encoding='bgr8'))
+                node.rect_pub.publish(node.bridge.cv2_to_imgmsg(img, encoding='bgr8'))
 
             img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
@@ -105,8 +90,6 @@ def extract_corners_from_image(rgb_image, node=None):
                 cv2.destroyAllWindows()
         else:
             return None
-
-        # node.get_logger().info('rectification done')
 
     # # Interactive HSV threshold sliders
     # def update_threshold(*args):
@@ -178,7 +161,6 @@ def extract_corners_from_image(rgb_image, node=None):
     # get corners for tangram shape corresponding to each color
     masks = []
     for lower, upper, color_name in colors:
-        # node.get_logger().info(f'processing {color_name}')
         # generate image mask
         if REAL:
             if color_name == 'red':
@@ -286,10 +268,8 @@ def extract_corners_from_image(rgb_image, node=None):
         cv2.destroyAllWindows()
 
     if ROS_PUB and node is not None:
-        if output_final is None or counter < 100:
-            output_final = img
         node.masked_pub.publish(node.bridge.cv2_to_imgmsg(cv2.cvtColor(master_mask, cv2.COLOR_GRAY2BGR), encoding='bgr8'))
-        node.output_pub.publish(node.bridge.cv2_to_imgmsg(output_final, encoding='bgr8'))
+        node.output_pub.publish(node.bridge.cv2_to_imgmsg(img, encoding='bgr8'))
 
     return tangram
 

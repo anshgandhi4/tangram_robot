@@ -40,12 +40,6 @@ class RealSenseSubscriber(Node):
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.tf_broadcaster = TransformBroadcaster(self)
 
-        self.rand = [0.0] * 7#[0.0, np.pi/2, np.pi/4, -np.pi/4, np.pi/6, -np.pi/6, np.pi/3]
-
-        self.base_rot = np.array([[-1, 0, 0],
-                                  [0, 1, 0],
-                                  [0, 0, -1]])
-
         self.cam_sub = self.create_subscription(Image, '/camera/camera/color/image_raw', self.image_callback, 1)
         self.bridge = CvBridge()
 
@@ -94,56 +88,49 @@ class RealSenseSubscriber(Node):
         if tangram is None:
             return
 
-        if len(tangram.pieces) <= 7:
-            if not tangram.pieces[0].meters:
-                return
+        if len(tangram.pieces) > 0 and not tangram.pieces[0].meters:
+            return
 
-            for p in range(len(tangram.pieces)):
-                piece = tangram.pieces[p]
-                # if piece.color != 'green':
-                #     continue
-               
-                # TODO: NEED TO UNCOMMENT THIS
-                # piece.pose = np.array([0.0, 0.0, np.pi/4])  
+        self.num_frames += 1
+        for p in range(len(tangram.pieces)):
+            piece = tangram.pieces[p]
 
-                z_axis_quat = self.z_axis_rot(piece.pose[2] + np.pi)
-                final_quat = self.final_quat(z_axis_quat)
+            z_axis_quat = self.z_axis_rot(piece.pose[2] + np.pi)
+            final_quat = self.final_quat(z_axis_quat)
 
-                transform = TransformStamped()
-                transform.header = msg.header
-                transform.header.frame_id = 'ar_marker_0'
-                transform.child_frame_id = f'tangram_pick_{p}'
-                transform.transform.translation.x = float(piece.pose[0]) - 0.066 * np.sin(piece.pose[2])
-                # NOTE: THESE OFFSETS ARE BASED ON THE TRANSLATION FROM EEF TO WRIST 3
-                transform.transform.translation.y = float(piece.pose[1]) - 0.066 *  np.cos(piece.pose[2])
-                transform.transform.translation.z = 0.255
-                transform.transform.rotation.x = final_quat[0]
-                transform.transform.rotation.y = final_quat[1]
-                transform.transform.rotation.z = final_quat[2]
-                transform.transform.rotation.w = final_quat[3]
+            transform = TransformStamped()
+            transform.header = msg.header
+            transform.header.frame_id = 'ar_marker_0'
+            transform.child_frame_id = f'tangram_pick_{p}'
+            # NOTE: THESE OFFSETS ARE BASED ON THE TRANSLATION FROM EEF TO WRIST 3
+            transform.transform.translation.x = float(piece.pose[0]) - 0.066 * np.sin(piece.pose[2])
+            transform.transform.translation.y = float(piece.pose[1]) - 0.066 * np.cos(piece.pose[2])
+            transform.transform.translation.z = 0.255
+            transform.transform.rotation.x = final_quat[0]
+            transform.transform.rotation.y = final_quat[1]
+            transform.transform.rotation.z = final_quat[2]
+            transform.transform.rotation.w = final_quat[3]
 
-                self.tf_broadcaster.sendTransform(transform)
-                self.num_frames += 1
+            self.tf_broadcaster.sendTransform(transform)
 
-                try:
-                    transform = self.tf_buffer.lookup_transform('base_link', f'tangram_pick_{p}', rclpy.time.Time()).transform
-                except:
-                    self.get_logger().info('still waiting for buffer transform')
-                    continue
+            try:
+                transform = self.tf_buffer.lookup_transform('base_link', f'tangram_pick_{p}', rclpy.time.Time()).transform
+            except:
+                self.get_logger().info('still waiting for buffer transform')
+                continue
+            
+            if self.piece_transforms[p] is not None and self.num_frames > 10000:
+                pick_pose = self.piece_transforms[p]
+            else:
+                pick_pose = self.transform_stamped_to_pose_stamped(transform, msg)
+                self.piece_transforms[p] = pick_pose
 
-                
-                if self.piece_transforms[p] is not None and self.num_frames > 10000:
-                    pick_pose = self.piece_transforms[p]
-                else:
-                    pick_pose = self.transform_stamped_to_pose_stamped(transform, msg)
-                    self.piece_transforms[p] = pick_pose
+            self.pick_publishers[p].publish(pick_pose)
 
-                self.pick_publishers[p].publish(pick_pose)
-
-                place_pose = pick_pose
-                place_pose.pose.position.x *= -1
-                self.tf_broadcaster.sendTransform(self.pose_stamped_to_transform_stamped(place_pose, f'tangram_place_{p}'))
-                self.place_publishers[p].publish(place_pose)
+            place_pose = pick_pose
+            place_pose.pose.position.x *= -1
+            self.tf_broadcaster.sendTransform(self.pose_stamped_to_transform_stamped(place_pose, f'tangram_place_{p}'))
+            self.place_publishers[p].publish(place_pose)
 
 def main(args=None):
     rclpy.init(args=args)
