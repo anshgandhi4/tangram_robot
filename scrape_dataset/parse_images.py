@@ -4,12 +4,10 @@ import numpy as np
 from pathlib import Path
 
 from tangram import Piece, Tangram
+from sam3.sam3_client import send_image_for_prediction, decode_masks
 
-global rect_final
-global output_final
-global counter
-counter = 0
-rect_final = output_final = None
+# TODO: Replace with actual SAM3 server URL
+SAM3_SERVER_URL = "https://lowlily-isolating-daphine.ngrok-free.dev"
 
 def rectify(image, rect_pts, tag_size=100, center_pos=(100, 100), output_size=(500, 500)):
     pts = np.array(rect_pts[::-1], dtype=np.float32)
@@ -33,9 +31,6 @@ def extract_corners_from_image(rgb_image, node=None):
     ROS_PUB = True
     CENTER = None
     ARUCO_RATIO = None # m / pixel
-    global rect_final
-    global output_final
-    global counter
 
     # read rgb image
     img = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2HSV)
@@ -63,12 +58,10 @@ def extract_corners_from_image(rgb_image, node=None):
             tag_position_mapping.append(tag_pos)
 
         # Detect ArUco markers in an image
-        # node.get_logger().info('detecting aruco')
         if int(cv2.__version__.split('.')[1]) >= 7: # 4._.0
             corners, _, _ = cv2.aruco.ArucoDetector(aruco_dict, aruco_params).detectMarkers(aruco_img)
         else:
             corners, _, _ = cv2.aruco.detectMarkers(aruco_img, aruco_dict, parameters=aruco_params)
-        # node.get_logger().info('detected aruco')
 
         found_four = False
         for cont in corners:
@@ -84,11 +77,7 @@ def extract_corners_from_image(rgb_image, node=None):
             img, _ = rectify(aruco_img, corners, tag_size=TAG_SIZE, center_pos=CENTER, output_size=(aruco_img.shape[1], aruco_img.shape[0]))
 
             if ROS_PUB and node is not None:
-                if rect_final is None or counter < 100:
-                    rect_final = img
-                    counter += 1
-
-                node.rect_pub.publish(node.bridge.cv2_to_imgmsg(rect_final, encoding='bgr8'))
+                node.rect_pub.publish(node.bridge.cv2_to_imgmsg(img, encoding='bgr8'))
 
             img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
@@ -105,8 +94,6 @@ def extract_corners_from_image(rgb_image, node=None):
                 cv2.destroyAllWindows()
         else:
             return None
-
-        # node.get_logger().info('rectification done')
 
     # # Interactive HSV threshold sliders
     # def update_threshold(*args):
@@ -157,13 +144,13 @@ def extract_corners_from_image(rgb_image, node=None):
     # cv2.destroyAllWindows()
 
     if REAL:
-        colors = [(np.array([105, 183, 126]), np.array([115, 255, 255]), 'blue'),
-                  (np.array([98, 213, 163]),  np.array([104, 255, 211]), 'light blue'),
-                  (np.array([71, 143, 0]),    np.array([99, 255, 171]),  'green'),
-                  (np.array([21, 71, 72]),    np.array([32, 255, 255]),  'yellow'),
-                  (np.array([89, 97, 163]),   np.array([119, 152, 224]), 'purple'),
-                  (np.array([154, 148, 164]), np.array([173, 197, 255]), 'hot pink'),
-                  ((np.array([0, 134, 151]), np.array([172, 129, 132])), (np.array([3, 201, 173]), np.array([179, 255, 198])), 'red')]
+        colors = [(np.array([105, 183, 126]), np.array([115, 255, 255]), 'blue', 'blue triangle'),
+                  (np.array([98, 213, 163]),  np.array([104, 255, 211]), 'light blue', 'light blue triangle'),
+                  (np.array([71, 143, 0]),    np.array([99, 255, 171]),  'green', 'green triangle'),
+                  (np.array([21, 71, 72]),    np.array([32, 255, 255]),  'yellow', 'yellow square'),
+                  (np.array([89, 97, 163]),   np.array([119, 152, 224]), 'purple', 'light purple square'),
+                  (np.array([154, 148, 164]), np.array([173, 197, 255]), 'hot pink', 'hot pink parallelogram'),
+                  ((np.array([0, 134, 151]), np.array([172, 129, 132])), (np.array([3, 201, 173]), np.array([179, 255, 198])), 'red', 'red triangle')]
     else:
         # get count of all non-gray colors present in image
         color_counter = Counter([tuple(pixel) for row in img for pixel in row if pixel[1] != 0])
@@ -175,20 +162,25 @@ def extract_corners_from_image(rgb_image, node=None):
     if not REAL:
         tangram.prompt = str(image_path).split('tangram-')[1].split('-solution')[0].replace('-', ' ')
 
+    # save image for SAM3 segmentation
+    sam3_image_path = str(Path(__file__).parent / 'tangram_input.jpg')
+    cv2.imwrite(sam3_image_path, cv2.cvtColor(img, cv2.COLOR_HSV2BGR))
+
     # get corners for tangram shape corresponding to each color
     masks = []
-    for lower, upper, color_name in colors:
+    for lower, upper, color_name, color_name_sam3 in colors:
         # node.get_logger().info(f'processing {color_name}')
         # generate image mask
         if REAL:
-            if color_name == 'red':
-                mask = cv2.inRange(img, lower[0], upper[0])
-                mask2 = cv2.inRange(img, lower[1], upper[1])
-                mask = cv2.bitwise_or(mask, mask2)
+            # Use SAM3 for segmentation
+            result = send_image_for_prediction(SAM3_SERVER_URL, sam3_image_path, color_name_sam3)
+            sam3_masks = decode_masks(result)
+            if sam3_masks:
+                # Use the first (highest confidence) mask, convert to uint8
+                mask = (sam3_masks[0] > 127).astype(np.uint8) * 255
             else:
-                mask = cv2.inRange(img, lower, upper)
-
-            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, (25, 25))
+                # No mask found for this color
+                mask = np.zeros(img.shape[:2], dtype=np.uint8)
         else:
             mask = np.all(img == lower, axis=-1).astype(np.uint8) * 255
         masks.append(mask)
@@ -286,10 +278,8 @@ def extract_corners_from_image(rgb_image, node=None):
         cv2.destroyAllWindows()
 
     if ROS_PUB and node is not None:
-        if output_final is None or counter < 100:
-            output_final = img
         node.masked_pub.publish(node.bridge.cv2_to_imgmsg(cv2.cvtColor(master_mask, cv2.COLOR_GRAY2BGR), encoding='bgr8'))
-        node.output_pub.publish(node.bridge.cv2_to_imgmsg(output_final, encoding='bgr8'))
+        node.output_pub.publish(node.bridge.cv2_to_imgmsg(img, encoding='bgr8'))
 
     return tangram
 

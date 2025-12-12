@@ -22,6 +22,12 @@ source ~/tangram_venv/bin/activate
 pip install -r ~/ros2_ws/src/requirements.txt
 ```
 
+```bash
+cd src
+git clone https://github.com/AntonioMacaronio/sam3.git
+pip install requests
+```
+
 ## run code
 
 Run the following commands in separate distrobox terminals:
