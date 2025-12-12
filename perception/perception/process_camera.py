@@ -5,7 +5,7 @@ from geometry_msgs.msg import PoseStamped, TransformStamped
 import numpy as np
 from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation as R
-from tf2_ros import Buffer, TransformListener, TransformBroadcaster
+from tf2_ros import Buffer, TransformListener, TransformBroadcaster, StaticTransformBroadcaster
 
 import sys
 sys.path.append('src')
@@ -29,16 +29,31 @@ class RealSenseSubscriber(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.tf_broadcaster = TransformBroadcaster(self)
+        self.static_broadcaster = StaticTransformBroadcaster(self)
 
         self.cam_sub = self.create_subscription(Image, '/camera/camera/color/image_raw', self.image_callback, 1)
         self.bridge = CvBridge()
 
         self.piece_transforms = {'blue': None, 'light blue': None, 'green': None, 'yellow': None, 'purple': None, 'hot pink': None, 'red': None}
         self.num_frames = 0
+        self.base_to_cam = None
+
+        self.static_base_to_cam = None
+        self.static_cam_to_ar0 = None
 
         self.timer = self.create_timer(1, self.publish_pick_poses)
+        # self.static_timer = self.create_timer(0.5, self.broadcast_static_transforms)
         self.process_image_lock = False
 
+    def broadcast_static_transforms(self):
+        if self.static_base_to_cam is not None:
+            self.static_broadcaster.sendTransform(self.static_base_to_cam)
+            self.get_logger().info('Broadcasting static transforms...')
+        if self.static_cam_to_ar0 is not None:
+            self.static_broadcaster.sendTransform(self.static_cam_to_ar0)
+            self.get_logger().info('Broadcasting static transforms...')
+
+        
     def pose_stamped_to_transform_stamped(self, pose, child_frame_id):
         transform = TransformStamped()
         transform.header = pose.header
@@ -82,7 +97,7 @@ class RealSenseSubscriber(Node):
                 self.pick_publishers[list(self.piece_transforms.keys()).index(color)].publish(self.piece_transforms[color])
 
     def image_callback(self, msg):
-        tangram = extract_corners_from_image(self.bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8'), self)
+        tangram = extract_corners_from_image(self.bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8'), node=self, ROS_PUB=True)
         if tangram is None:
             return
 
@@ -94,6 +109,8 @@ class RealSenseSubscriber(Node):
             piece = tangram.pieces[p]
             p_col = piece.color
 
+            # TODO: UNDO THIS
+            piece.pose[2] = np.pi
             z_axis_quat = self.z_axis_rot(piece.pose[2] + np.pi)
             final_quat = self.final_quat(z_axis_quat)
 
@@ -114,6 +131,16 @@ class RealSenseSubscriber(Node):
 
             try:
                 transform = self.tf_buffer.lookup_transform('base_link', f'tangram_pick_{p_col}', rclpy.time.Time()).transform
+                if self.num_frames == 1:
+                    base_to_cam_transform = self.tf_buffer.lookup_transform('ar_marker_8', 'camera_link', rclpy.time.Time()).transform
+                    base_to_ar0 = self.tf_buffer.lookup_transform('camera_link', 'ar_marker_0', rclpy.time.Time()).transform
+
+                    self.static_base_to_cam = base_to_cam_transform
+                    self.static_cam_to_ar0 = base_to_ar0
+
+                    self.static_broadcaster.sendTransform(base_to_cam_transform)
+                    self.static_broadcaster.sendTransform(base_to_ar0)
+                    
             except:
                 self.get_logger().info('still waiting for buffer transform')
                 continue
@@ -121,6 +148,7 @@ class RealSenseSubscriber(Node):
             if self.piece_transforms[p_col] is not None and self.num_frames > 200:
                 pick_pose = self.piece_transforms[p_col]
             else:
+                # self.base_to_cam = self.tf_buffer.lookup_transform('base_link', 'camera_link', rclpy.time.Time()).transform
                 pick_pose = self.transform_stamped_to_pose_stamped(transform, msg)
                 self.piece_transforms[p_col] = pick_pose
 

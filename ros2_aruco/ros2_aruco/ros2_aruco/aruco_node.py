@@ -187,6 +187,10 @@ class ArucoNode(rclpy.node.Node):
         # Set up tf2 broadcaster
         self.tf_broadcaster = TransformBroadcaster(self)
 
+        self.static_timer = self.create_timer(0.5, self.broadcast_static_transforms)
+        self.static_base_to_cam = None
+        self.static_cam_to_ar0 = None
+
         # Set up fields for camera parameters
         self.info_msg = None
         self.intrinsic_mat = None
@@ -196,6 +200,14 @@ class ArucoNode(rclpy.node.Node):
         self.aruco_parameters = cv2.aruco.DetectorParameters_create()
 
         self.bridge = CvBridge()
+
+    def broadcast_static_transforms(self):
+        if self.static_base_to_cam is not None:
+            self.static_broadcaster.sendTransform(self.static_base_to_cam)
+            self.get_logger().info('Broadcasting static transforms...')
+        if self.static_cam_to_ar0 is not None:
+            self.static_broadcaster.sendTransform(self.static_cam_to_ar0)
+            self.get_logger().info('Broadcasting static transforms...')
 
     def info_callback(self, info_msg):
         self.info_msg = info_msg
@@ -326,6 +338,13 @@ class ArucoNode(rclpy.node.Node):
 
             self.poses_pub.publish(pose_array)
             self.markers_pub.publish(markers)
+
+
+            # base_to_cam_transform = self.tf_buffer.lookup_transform('ar_marker_8', 'camera_link', rclpy.time.Time()).transform
+            # base_to_ar0 = self.tf_buffer.lookup_transform('camera_link', 'ar_marker_0', rclpy.time.Time()).transform
+
+            # self.static_base_to_cam = base_to_cam_transform
+            # self.static_cam_to_ar0 = base_to_ar0
 
 
 def main():

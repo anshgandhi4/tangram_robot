@@ -278,7 +278,7 @@ Visualization Manager:
         All Enabled: false
         ar_marker_0:
           Value: true
-        ar_marker_9:
+        ar_marker_8:
           Value: true
         base:
           Value: false
@@ -304,9 +304,19 @@ Visualization Manager:
           Value: false
         shoulder_link:
           Value: false
-        tangram_pick_1:
+        tangram_pick_blue:
           Value: true
-        tangram_place_1:
+        tangram_pick_green:
+          Value: true
+        tangram_pick_hot pink:
+          Value: true
+        tangram_pick_light blue:
+          Value: true
+        tangram_pick_purple:
+          Value: true
+        tangram_pick_red:
+          Value: true
+        tangram_pick_yellow:
           Value: true
         tool0:
           Value: false
@@ -335,9 +345,21 @@ Visualization Manager:
           camera_depth_frame:
             camera_depth_optical_frame:
               ar_marker_0:
-                tangram_pick_1:
+                tangram_pick_blue:
                   {}
-              ar_marker_9:
+                tangram_pick_green:
+                  {}
+                tangram_pick_hot pink:
+                  {}
+                tangram_pick_light blue:
+                  {}
+                tangram_pick_purple:
+                  {}
+                tangram_pick_red:
+                  {}
+                tangram_pick_yellow:
+                  {}
+              ar_marker_8:
                 base_link:
                   base:
                     tool0_controller:
@@ -354,8 +376,6 @@ Visualization Manager:
                                     {}
                                 ft_frame:
                                   {}
-                  tangram_place_1:
-                    {}
                   world:
                     {}
       Update Interval: 0
@@ -421,10 +441,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.18539851903915405
+      Pitch: 0.46539849042892456
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 2.4504032135009766
+      Yaw: 2.150402307510376
     Saved: ~
 Window Geometry:
   Displays:
