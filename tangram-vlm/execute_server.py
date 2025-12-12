@@ -31,7 +31,7 @@ async def run_planning_cycle(user_instruction):
 
             chat = client.chats.create(model="gemini-3-pro-preview",
                                        config=types.GenerateContentConfig(
-                                        temperature=0.1,
+                                        temperature=1,
                                         tools=[{"function_declarations": funcs}]
                                     )
                                 )
@@ -87,6 +87,7 @@ DO NOT REFER TO ANY EXTERNAL SOURCES, OR MAKE NEW FILES.
                             "The previous response was blocked. Please try again, but be more concise and avoid harmful keywords."
                         )
                         continue
+
                     print("Gemini Response:", response.text)
                     if response.text and ("done" in response.text.lower() or "finished" in response.text.lower()):
                         break

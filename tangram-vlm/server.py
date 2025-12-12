@@ -88,6 +88,9 @@ class WindowManager:
         print(f"Warning: Polygon {name} not found for rotation.")
         return False
 
+    def get_all_poses(self):
+        return {polygon.name: {"center_x": polygon.center_x, "center_y": polygon.center_y, "angle": polygon.angle} for polygon in self.polygons}
+
     def get_all_points(self):
         return {polygon.name: [{"x": pt[0], "y": pt[1]} for pt in polygon.points] for polygon in self.polygons}
 
@@ -183,6 +186,12 @@ async def get_observation_points() -> str:
     """Return the coordinates of all points of all polygons in the window """
     await asyncio.sleep(1)
     return json.dumps(window_manager.get_all_points())
+
+@mcp.tool()
+async def get_polygon_poses() -> str:
+    """Return the 2D poses of all polygons in the window """
+    await asyncio.sleep(1)
+    return json.dumps(window_manager.get_all_poses())
 
 def start_mcp_server():
     """Runs the FastMCP server in this function."""
