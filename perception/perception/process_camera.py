@@ -49,6 +49,9 @@ class RealSenseSubscriber(Node):
         self.cam_sub = self.create_subscription(Image, '/camera/camera/color/image_raw', self.image_callback, 1)
         self.bridge = CvBridge()
 
+        self.piece_transforms = [None for _ in range(7)]
+        self.num_frames = 0
+
     def pose_stamped_to_transform_stamped(self, pose, child_frame_id):
         transform = TransformStamped()
         transform.header = pose.header
@@ -97,11 +100,11 @@ class RealSenseSubscriber(Node):
 
             for p in range(len(tangram.pieces)):
                 piece = tangram.pieces[p]
-                if piece.color != 'green':
-                    continue
-
+                # if piece.color != 'green':
+                #     continue
+               
                 # TODO: NEED TO UNCOMMENT THIS
-                piece.pose = np.array([0.0, 0.0, 0.0])
+                # piece.pose = np.array([0.0, 0.0, np.pi/4])  
 
                 z_axis_quat = self.z_axis_rot(piece.pose[2] + np.pi)
                 final_quat = self.final_quat(z_axis_quat)
@@ -110,15 +113,17 @@ class RealSenseSubscriber(Node):
                 transform.header = msg.header
                 transform.header.frame_id = 'ar_marker_0'
                 transform.child_frame_id = f'tangram_pick_{p}'
-                transform.transform.translation.x = float(piece.pose[0])
+                transform.transform.translation.x = float(piece.pose[0]) - 0.066 * np.sin(piece.pose[2])
                 # NOTE: THESE OFFSETS ARE BASED ON THE TRANSLATION FROM EEF TO WRIST 3
-                transform.transform.translation.y = float(piece.pose[1]) - 0.04
+                transform.transform.translation.y = float(piece.pose[1]) - 0.066 *  np.cos(piece.pose[2])
                 transform.transform.translation.z = 0.255
                 transform.transform.rotation.x = final_quat[0]
                 transform.transform.rotation.y = final_quat[1]
                 transform.transform.rotation.z = final_quat[2]
                 transform.transform.rotation.w = final_quat[3]
+
                 self.tf_broadcaster.sendTransform(transform)
+                self.num_frames += 1
 
                 try:
                     transform = self.tf_buffer.lookup_transform('base_link', f'tangram_pick_{p}', rclpy.time.Time()).transform
@@ -126,13 +131,19 @@ class RealSenseSubscriber(Node):
                     self.get_logger().info('still waiting for buffer transform')
                     continue
 
-                pick_pose = self.transform_stamped_to_pose_stamped(transform, msg)
+                
+                if self.piece_transforms[p] is not None and self.num_frames > 10000:
+                    pick_pose = self.piece_transforms[p]
+                else:
+                    pick_pose = self.transform_stamped_to_pose_stamped(transform, msg)
+                    self.piece_transforms[p] = pick_pose
+
                 self.pick_publishers[p].publish(pick_pose)
 
                 place_pose = pick_pose
                 place_pose.pose.position.x *= -1
-                self.place_publishers[p].publish(place_pose)
                 self.tf_broadcaster.sendTransform(self.pose_stamped_to_transform_stamped(place_pose, f'tangram_place_{p}'))
+                self.place_publishers[p].publish(place_pose)
 
 def main(args=None):
     rclpy.init(args=args)
