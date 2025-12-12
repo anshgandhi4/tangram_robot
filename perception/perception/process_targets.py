@@ -128,7 +128,7 @@ class TargetProcessor(Node):
                 self.get_logger().info('target waiting for buffer transform')
                 continue
 
-            if self.piece_transforms[p_col] is not None and self.num_frames > 1000:
+            if self.piece_transforms[p_col] is not None and self.num_frames > 200:
                 place_pose = self.piece_transforms[p_col]
             else:
                 place_pose = self.transform_stamped_to_pose_stamped(transform)
