@@ -1,6 +1,6 @@
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import PointStamped
+from geometry_msgs.msg import PointStamped, PoseStamped
 from tf2_ros import Buffer, TransformListener
 import numpy as np
 
@@ -10,22 +10,34 @@ class TransformCubePose(Node):
     def __init__(self):
         super().__init__('transform_cube_pose')
 
+        self.target_poses = [(0.12, 0.61, 0), (0.12, 0.61, 0), (0.12, 0.61, 0), (0.12, 0.61, 0), (0.12, 0.61, 0), (0.12, 0.61, 0)]
+
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        self.cube_pose_sub = self.create_subscription(PointStamped, '/cube_pose', self.cube_pose_callback, 10)
-        self.cube_pose_pub = self.create_publisher(PointStamped, '/transformed_cube_pose', 10)
+        self.cube_pose_sub = self.create_subscription(PointStamped, '/tangram/pick_0_pose', self.tangram_tf_publish, 10)
+        # self.cube_pose_sub = self.create_subscription(PointStamped, '/tangram/place_0_pose', self.tangram_tf_publish, 10)
 
         rclpy.spin_once(self, timeout_sec=2)
-        self.cube_pose = None
 
-    def cube_pose_callback(self, msg: PointStamped):
-        if self.cube_pose is None:
-            self.cube_pose = self.transform_cube_pose(msg)
+    def tangram_tf_publish(self, msg):
+        target_pose = self.target_poses[0]
 
-        self.cube_pose_pub.publish(self.cube_pose)
+        transformed = PoseStamped()
+        transformed.header.frame_id = 'base_link'
+        transformed.pose.position.x = target_pose[0]
+        transformed.pose.position.y = target_pose[1]
+        transformed.pose.position.z = 0.04
 
-    def transform_cube_pose(self, msg: PointStamped):
+        theta = target_pose[2]
+        transformed.pose.orientation.x = (1/np.sqrt(2)) * np.cos(theta/2)
+        transformed.pose.orientation.y = -(1/np.sqrt(2))
+        transformed.pose.orientation.z = 0.0
+        transformed.pose.orientation.w = (1/np.sqrt(2)) *np.sin(theta/2)
+
+        self.cube_pose_pub.publish(transformed)
+
+    def transform_cube_pose(self, msg):
         """ 
         Transform point into base_link frame
         Args: 
@@ -34,7 +46,8 @@ class TransformCubePose(Node):
             PointStamped: point in base_link_frame in form [x, y, z]
         """
 
-        pose = self.tf_buffer.lookup_transform('base_link', 'camera_depth_optical_frame', rclpy.time.Time()).transform
+        pose = self.tf_buffer.lookup_transform('base_link', 'wrist_3_link', rclpy.time.Time()).transform
+        self.get_logger().info(f"Transform: {pose}")
 
         G = np.eye(4)
         G[:3, :3] = R.from_quat([pose.rotation.x, pose.rotation.y, pose.rotation.z, pose.rotation.w]).as_matrix()

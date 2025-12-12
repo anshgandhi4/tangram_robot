@@ -136,7 +136,7 @@ class ArucoNode(rclpy.node.Node):
         self.get_logger().info(f"Marker size: {self.marker_size}")
         
         self.marker_size_map = {1: 0.15, 2: 0.15, 3: 0.15, 4: 0.15, 5: 0.15, 11: 0.15, 
-                                6: 0.15, 7: 0.15, 8: 0.15, 9: 0.15, 10: 0.15}
+                                6: 0.15, 7: 0.15, 8: 0.15, 9: 0.15, 10: 0.15, 0: 0.10}
         self.get_logger().info(f"Marker size map for marker ids is: {self.marker_size_map}")
 
         dictionary_id_name = (
@@ -230,23 +230,31 @@ class ArucoNode(rclpy.node.Node):
             # process each marker individually to allow for diff marker sizes
             rvecs = []
             tvecs = []
-            turtlebot_corners = []
-            turtlebot_markers = []
+            table_corners = []
+            table_markers = []
             goal_corners = []
             goal_markers = []
             final_marker_ids = []
             for i, marker_id in enumerate(marker_ids):
-                marker_size = self.marker_size_map[marker_id[0]]
-                if marker_size == 0.05:
-                    turtlebot_corners.append(corners[i])
-                    turtlebot_markers.append(marker_id)
+                if marker_id[0] == 0:
+                    marker_size = 0.10
+                else:
+                    marker_size = 0.15
+                # marker_size = self.marker_size_map[marker_id[0]]
+                if marker_size == 0.10:
+                    table_corners.append(corners[i])
+                    table_markers.append(marker_id)
                 elif marker_size == 0.15:
                     goal_corners.append(corners[i])
                     goal_markers.append(marker_id)
 
             if len(goal_markers) > 0:
                 goal_rvecs, goal_tvecs = [], []
-                if cv2.__version__ > "4.0.0":
+                if cv2.__version__ > "4.7.0":
+                    goal_rvecs, goal_tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(
+                        goal_corners, 0.15, self.intrinsic_mat, self.distortion
+                    )
+                elif cv2.__version__ > "4.0.0":
                     goal_rvecs, goal_tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(
                         goal_corners, 0.15, self.intrinsic_mat, self.distortion
                     )
@@ -260,19 +268,19 @@ class ArucoNode(rclpy.node.Node):
                 tvecs.extend(goal_tvecs)
                 final_marker_ids.extend(goal_markers)
 
-            if len(turtlebot_markers) > 0:
-                turtlebot_rvecs, turtlebot_tvecs = [], []
+            if len(table_markers) > 0:
+                table_rvecs, table_tvecs = [], []
                 if cv2.__version__ > "4.0.0":
-                    turtlebot_rvecs, turtlebot_tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(
-                        turtlebot_corners, 0.05, self.intrinsic_mat, self.distortion
+                    table_rvecs, table_tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(
+                        table_corners, 0.10, self.intrinsic_mat, self.distortion
                     )
                 else:
-                    turtlebot_rvecs, turtlebot_tvecs = cv2.aruco.estimatePoseSingleMarkers(
-                        turtlebot_corners, turtlebot_markers, self.intrinsic_mat, self.distortion
+                    table_rvecs, table_tvecs = cv2.aruco.estimatePoseSingleMarkers(
+                        table_corners, table_markers, self.intrinsic_mat, self.distortion
                     )
-                rvecs.extend(turtlebot_rvecs)
-                tvecs.extend(turtlebot_tvecs)
-                final_marker_ids.extend(turtlebot_markers)
+                rvecs.extend(table_rvecs)
+                tvecs.extend(table_tvecs)
+                final_marker_ids.extend(table_markers)
 
             for i, marker_id in enumerate(final_marker_ids):
                 pose = Pose()
