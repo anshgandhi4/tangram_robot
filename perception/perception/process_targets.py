@@ -74,7 +74,7 @@ class TargetProcessor(Node):
 
         self.num_frames += 1
         ARUCO_RATIO = None
-        RIGHT_BUFFER = 0.55
+        RIGHT_BUFFER = -0.75
         UP_BUFFER = 0.08
         for piece in tangram.pieces:
             if piece.shape == 'square':

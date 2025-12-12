@@ -83,9 +83,10 @@ class PickAndPlace(Node):
                 continue
 
             current_job_queue = []
+            # 315 - 0.005*pick_pose.position.y
 
             # NOTE: WE FIXED THE Z VALUES TO THE CONSTANT BECAUSE IT ALWAYS WORKS. THE ARUCO DETECTION IS NOISY SO THE Z VALUE DERIVED FROM THAT IS COOKED TOO
-            self.pick_pose = (pick_pose.position.x, pick_pose.position.y, 0.0325 - 0.005*pick_pose.position.y, pick_pose.orientation.x, pick_pose.orientation.y, pick_pose.orientation.z, pick_pose.orientation.w)
+            self.pick_pose = (pick_pose.position.x, pick_pose.position.y, 0.027, pick_pose.orientation.x, pick_pose.orientation.y, pick_pose.orientation.z, pick_pose.orientation.w)
             self.place_pose = (place_pose.position.x, place_pose.position.y, 0.0325, place_pose.orientation.x, place_pose.orientation.y, place_pose.orientation.z, place_pose.orientation.w)
 
             self.get_logger().info(f'pick pose: {self.pick_pose[:3]}')
