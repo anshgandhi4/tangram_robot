@@ -4,7 +4,7 @@ import numpy as np
 from pathlib import Path
 
 from tangram import Piece, Tangram
-from sam3.sam3_client import send_image_for_prediction, decode_masks
+from sam3.sam3_client import send_saved_image_for_prediction, decode_masks
 
 # TODO: Replace with actual SAM3 server URL
 SAM3_SERVER_URL = "https://lowlily-isolating-daphine.ngrok-free.dev"
@@ -24,13 +24,17 @@ def rectify(image, rect_pts, tag_size=100, center_pos=(100, 100), output_size=(5
 
     return rectified, H
 
-def extract_corners_from_image(rgb_image, node=None):
+def extract_corners_from_image(rgb_image, REAL=True, ROS_PUB=True, DEBUG=False, node=None, prompt=''):
+    if node and node.process_image_lock:
+        return None
+
+    if node:
+        node.process_image_lock = True
+
     NUM_COLORS = 7
-    REAL = True
-    DEBUG = False
-    ROS_PUB = True
     CENTER = None
     ARUCO_RATIO = None # m / pixel
+    SAM = False
 
     # read rgb image
     img = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2HSV)
@@ -93,6 +97,8 @@ def extract_corners_from_image(rgb_image, node=None):
                 cv2.waitKey(0)
                 cv2.destroyAllWindows()
         else:
+            if node:
+                node.process_image_lock = False
             return None
 
     # # Interactive HSV threshold sliders
@@ -144,23 +150,21 @@ def extract_corners_from_image(rgb_image, node=None):
     # cv2.destroyAllWindows()
 
     if REAL:
-        colors = [(np.array([105, 183, 126]), np.array([115, 255, 255]), 'blue', 'blue triangle'),
-                  (np.array([98, 213, 163]),  np.array([104, 255, 211]), 'light blue', 'light blue triangle'),
+        colors = [(np.array([105, 183, 126]), np.array([115, 255, 255]), 'blue', 'smaller navy blue triangle'),
+                  (np.array([98, 213, 163]),  np.array([104, 255, 211]), 'light blue', 'larger light blue triangle'),
                   (np.array([71, 143, 0]),    np.array([99, 255, 171]),  'green', 'green triangle'),
-                  (np.array([21, 71, 72]),    np.array([32, 255, 255]),  'yellow', 'yellow square'),
+                  (np.array([21, 71, 72]),    np.array([32, 255, 255]),  'yellow', 'yellow triangle'),
                   (np.array([89, 97, 163]),   np.array([119, 152, 224]), 'purple', 'light purple square'),
                   (np.array([154, 148, 164]), np.array([173, 197, 255]), 'hot pink', 'hot pink parallelogram'),
-                  ((np.array([0, 134, 151]), np.array([172, 129, 132])), (np.array([3, 201, 173]), np.array([179, 255, 198])), 'red', 'red triangle')]
+                  ((np.array([0, 134, 151]), np.array([172, 129, 132])), (np.array([3, 201, 173]), np.array([179, 255, 198])), 'red', 'small scarlet triangle')]
     else:
         # get count of all non-gray colors present in image
         color_counter = Counter([tuple(pixel) for row in img for pixel in row if pixel[1] != 0])
 
         # get top NUM_COLORS most common colors
-        colors = [(np.array(color), np.array(color), '') for color, _ in color_counter.most_common(NUM_COLORS)]
+        colors = [(np.array(color), np.array(color), '', '') for color, _ in color_counter.most_common(NUM_COLORS)]
 
-    tangram = Tangram()
-    if not REAL:
-        tangram.prompt = str(image_path).split('tangram-')[1].split('-solution')[0].replace('-', ' ')
+    tangram = Tangram(prompt=prompt)
 
     # save image for SAM3 segmentation
     sam3_image_path = str(Path(__file__).parent / 'tangram_input.jpg')
@@ -173,14 +177,29 @@ def extract_corners_from_image(rgb_image, node=None):
         # generate image mask
         if REAL:
             # Use SAM3 for segmentation
-            result = send_image_for_prediction(SAM3_SERVER_URL, sam3_image_path, color_name_sam3)
-            sam3_masks = decode_masks(result)
-            if sam3_masks:
-                # Use the first (highest confidence) mask, convert to uint8
-                mask = (sam3_masks[0] > 127).astype(np.uint8) * 255
+            if SAM:
+                try:
+                    result = send_saved_image_for_prediction(SAM3_SERVER_URL, sam3_image_path, color_name_sam3)
+                    sam3_masks = decode_masks(result)
+                    if sam3_masks:
+                        # Use the first (highest confidence) mask, convert to uint8
+                        mask = (sam3_masks[0] > 127).astype(np.uint8) * 255
+                    else:
+                        # No mask found for this color
+                        mask = np.zeros(img.shape[:2], dtype=np.uint8)
+                except:
+                    node.get_logger().error('Error communicating with SAM3 server')
+                    node.process_image_lock = False
+                    return
             else:
-                # No mask found for this color
-                mask = np.zeros(img.shape[:2], dtype=np.uint8)
+                if color_name == 'red':
+                    mask = cv2.inRange(img, lower[0], upper[0])
+                    mask2 = cv2.inRange(img, lower[1], upper[1])
+                    mask = cv2.bitwise_or(mask, mask2)
+                else:
+                    mask = cv2.inRange(img, lower, upper)
+
+                mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, (25, 25))
         else:
             mask = np.all(img == lower, axis=-1).astype(np.uint8) * 255
         masks.append(mask)
@@ -218,7 +237,7 @@ def extract_corners_from_image(rgb_image, node=None):
 
         # add piece to tangram
         if contour is not None:
-            tangram.add_piece(Piece(contour, color_name))
+            tangram.add_piece(Piece(contour, lower))
 
         if DEBUG:
             # display mask
@@ -281,10 +300,13 @@ def extract_corners_from_image(rgb_image, node=None):
         node.masked_pub.publish(node.bridge.cv2_to_imgmsg(cv2.cvtColor(master_mask, cv2.COLOR_GRAY2BGR), encoding='bgr8'))
         node.output_pub.publish(node.bridge.cv2_to_imgmsg(img, encoding='bgr8'))
 
+    if node:
+        node.process_image_lock = False
     return tangram
 
 if __name__ == '__main__':
     from PIL import Image
     from tqdm import tqdm
-    for image_path in tqdm(sorted(list((Path(__file__).parent / 'asdf').iterdir()))):
-        extract_corners_from_image(np.array(Image.open(image_path)))
+    for image_path in tqdm(sorted(list((Path(__file__).parent / 'tangrams').iterdir()))):
+        prompt = str(image_path).split('tangram-')[1].split('-solution')[0].replace('-', ' ')
+        extract_corners_from_image(np.array(Image.open(image_path)), REAL=False, ROS_PUB=False, DEBUG=True, prompt=prompt)

@@ -21,6 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             'process_camera = perception.process_camera:main',
+            'process_targets = perception.process_targets:main',
         ],
     },
 )
