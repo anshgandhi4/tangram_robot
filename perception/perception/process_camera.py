@@ -82,7 +82,7 @@ class RealSenseSubscriber(Node):
                 self.pick_publishers[list(self.piece_transforms.keys()).index(color)].publish(self.piece_transforms[color])
 
     def image_callback(self, msg):
-        tangram = extract_corners_from_image(self.bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8'), self)
+        tangram = extract_corners_from_image(self.bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8'), node=self, ROS_PUB=True)
         if tangram is None:
             return
 
@@ -94,6 +94,8 @@ class RealSenseSubscriber(Node):
             piece = tangram.pieces[p]
             p_col = piece.color
 
+            # TODO: UNDO THIS
+            piece.pose[2] = 0.0
             z_axis_quat = self.z_axis_rot(piece.pose[2] + np.pi)
             final_quat = self.final_quat(z_axis_quat)
 
@@ -118,7 +120,7 @@ class RealSenseSubscriber(Node):
                 self.get_logger().info('still waiting for buffer transform')
                 continue
 
-            if self.piece_transforms[p_col] is not None and self.num_frames > 200:
+            if self.piece_transforms[p_col] is not None and self.num_frames > 1000:
                 pick_pose = self.piece_transforms[p_col]
             else:
                 pick_pose = self.transform_stamped_to_pose_stamped(transform, msg)

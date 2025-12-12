@@ -237,7 +237,7 @@ def extract_corners_from_image(rgb_image, REAL=True, ROS_PUB=True, DEBUG=False, 
 
         # add piece to tangram
         if contour is not None:
-            tangram.add_piece(Piece(contour, lower))
+            tangram.add_piece(Piece(contour, color_name if REAL else lower))
 
         if DEBUG:
             # display mask

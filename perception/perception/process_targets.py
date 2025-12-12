@@ -29,10 +29,11 @@ class TargetProcessor(Node):
         self.num_frames = 0
         self.pixel_to_color = {(164, 100, 255): 'blue', (18, 255, 255): 'light blue', (139, 148, 190): 'green', (102, 255, 255): 'yellow', (60, 255, 255): 'purple', (30, 255, 255): 'hot pink', (0, 228, 255): 'red'}
 
+        self.tangram = None
+        self.timer0 = self.create_timer(0.1, self.image_callback)
         self.timer = self.create_timer(1, self.publish_place_poses)
-        self.process_image_lock = False
 
-        self.image_callback(np.array(Image.open('/home/cc/ee106a/fa25/class/ee106a-aek/ros2_ws/src/scrape_dataset/tangrams/tangram-bear-solution-50.png')), 'bear')
+        self.get_tangram_from_dataset(np.array(Image.open('/home/cc/ee106a/fa25/class/ee106a-aek/ros2_ws/src/scrape_dataset/tangrams/tangram-bear-solution-50.png')), 'bear')
 
     def transform_stamped_to_pose_stamped(self, transform):
         pose_stamped = PoseStamped()
@@ -63,8 +64,8 @@ class TargetProcessor(Node):
             if self.piece_transforms[color] is not None:
                 self.place_publishers[list(self.piece_transforms.keys()).index(color)].publish(self.piece_transforms[color])
 
-    def image_callback(self, img, prompt):
-        tangram = extract_corners_from_image(img, node=self, REAL=False, ROS_PUB=False, prompt=prompt)
+    def get_tangram_from_dataset(self, img, prompt):
+        tangram = extract_corners_from_image(img, REAL=False, ROS_PUB=False, prompt=prompt)
         if tangram is None:
             return
 
@@ -73,26 +74,36 @@ class TargetProcessor(Node):
 
         self.num_frames += 1
         ARUCO_RATIO = None
-        RIGHT_BUFFER = 0.05
+        RIGHT_BUFFER = 0.6
         for piece in tangram.pieces:
             if piece.shape == 'square':
-                ARUCO_RATIO = 0.1016 / np.linalg.norm(piece.coords[0] - piece.coords[1])
+                piece.coords = piece.coords.astype(np.float32)
+                # TODO: ADDING EXTRA TOLERANCE HERE
+                ARUCO_RATIO = 1.1 * 0.1016 / np.linalg.norm(piece.coords[0] - piece.coords[1])
 
         if ARUCO_RATIO is None:
             return
 
         for p in range(len(tangram.pieces)):
             piece = tangram.pieces[p]
-            p_col = self.pixel_to_color[piece.color]
+            piece.color = self.pixel_to_color[piece.color]
 
-            piece.coords = piece.coords.astype(np.float32)
-            for coord in piece.coords:
-                coord[0] = float(coord[0] - img.shape[1] // 2) * ARUCO_RATIO
-                coord[1] = float(img.shape[0] // 2 - coord[1]) * ARUCO_RATIO + RIGHT_BUFFER
+            piece.pose[0] = float(piece.pose[0] - img.shape[1] // 2) * ARUCO_RATIO + RIGHT_BUFFER
+            piece.pose[1] = float(img.shape[0] // 2 - piece.pose[1]) * ARUCO_RATIO
 
         tangram.sort_by_color()
+        self.tangram = tangram
+
+    def image_callback(self):
+        if self.tangram is None:
+            return
+
+        tangram = self.tangram
 
         for p in range(len(tangram.pieces)):
+            piece = tangram.pieces[p]
+            p_col = piece.color
+
             z_axis_quat = self.z_axis_rot(piece.pose[2] + np.pi)
             final_quat = self.final_quat(z_axis_quat)
 
@@ -114,10 +125,10 @@ class TargetProcessor(Node):
             try:
                 transform = self.tf_buffer.lookup_transform('base_link', f'tangram_place_{p_col}', rclpy.time.Time()).transform
             except:
-                self.get_logger().info('still waiting for buffer transform')
+                self.get_logger().info('target waiting for buffer transform')
                 continue
 
-            if self.piece_transforms[p_col] is not None and self.num_frames > 200:
+            if self.piece_transforms[p_col] is not None and self.num_frames > 1000:
                 place_pose = self.piece_transforms[p_col]
             else:
                 place_pose = self.transform_stamped_to_pose_stamped(transform)

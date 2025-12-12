@@ -72,7 +72,9 @@ class PickAndPlace(Node):
 
         self.get_logger().info(f'picking')
         self.currently_picking = True # DO NOT MOVE THIS, WEIRD THINGS HAPPEN IF REMOVED (TREAT THIS AS A LOCK FOR THE JOB QUEUE)
-        for i in range(len(self.tangrams)):
+        # TODO: UNDO THIS
+        # for i in range(len(self.tangrams)):
+        for i in [0]:
             pick_pose = self.tangrams[i][0]
             place_pose = self.tangrams[i][1]
 
@@ -90,14 +92,14 @@ class PickAndPlace(Node):
             self.get_logger().info(f'place pose: {self.place_pose[:3]}')
 
             # 1) move to pre-pick position (pick + some z offset)
-            ik = self.ik_planner.compute_ik(self.joint_state, self.pick_pose[0], self.pick_pose[1], self.pick_pose[2] + 0.03, self.pick_pose[3], self.pick_pose[4], self.pick_pose[5], self.pick_pose[6])
+            ik = self.ik_planner.compute_ik(self.joint_state, self.pick_pose[0], self.pick_pose[1], self.pick_pose[2] + 0.07, self.pick_pose[3], self.pick_pose[4], self.pick_pose[5], self.pick_pose[6])
             if ik is None:
                 self.get_logger().error('Failed to compute IK for pick position, skipping this piece')
                 continue
             current_job_queue.append(ik)
 
             # 2) lower to pick position
-            ik = self.ik_planner.compute_ik(self.joint_state, self.pick_pose[0], self.pick_pose[1], self.pick_pose[2] - 0.0067, self.pick_pose[3], self.pick_pose[4], self.pick_pose[5], self.pick_pose[6])
+            ik = self.ik_planner.compute_ik(self.joint_state, self.pick_pose[0], self.pick_pose[1], self.pick_pose[2], self.pick_pose[3], self.pick_pose[4], self.pick_pose[5], self.pick_pose[6])
             if ik is None:
                 self.get_logger().error('Failed to compute IK for pick position, skipping this piece')
                 continue
@@ -107,14 +109,14 @@ class PickAndPlace(Node):
             current_job_queue.append('toggle_grip')
 
             # 4) move back to pre-pick position
-            ik = self.ik_planner.compute_ik(self.joint_state, self.pick_pose[0], self.pick_pose[1], self.pick_pose[2] + 0.03, self.pick_pose[3], self.pick_pose[4], self.pick_pose[5], self.pick_pose[6])
+            ik = self.ik_planner.compute_ik(self.joint_state, self.pick_pose[0], self.pick_pose[1], self.pick_pose[2] + 0.07, self.pick_pose[3], self.pick_pose[4], self.pick_pose[5], self.pick_pose[6])
             if ik is None:
                 self.get_logger().error('Failed to compute IK for pick position, skipping this piece')
                 continue
             current_job_queue.append(ik)
 
             # 5) move to pre-place position
-            ik = self.ik_planner.compute_ik(self.joint_state, self.place_pose[0], self.place_pose[1], self.place_pose[2] + 0.03, self.place_pose[3], self.place_pose[4], self.place_pose[5], self.place_pose[6])
+            ik = self.ik_planner.compute_ik(self.joint_state, self.place_pose[0], self.place_pose[1], self.place_pose[2] + 0.07, self.place_pose[3], self.place_pose[4], self.place_pose[5], self.place_pose[6])
             if ik is None:
                 self.get_logger().error('Failed to compute IK for place position, skipping this piece')
                 continue
@@ -131,7 +133,7 @@ class PickAndPlace(Node):
             current_job_queue.append('toggle_grip')
 
             # 8) move back to pre-place position
-            ik = self.ik_planner.compute_ik(self.joint_state, self.place_pose[0], self.place_pose[1], self.place_pose[2] + 0.03, self.place_pose[3], self.place_pose[4], self.place_pose[5], self.place_pose[6])
+            ik = self.ik_planner.compute_ik(self.joint_state, self.place_pose[0], self.place_pose[1], self.place_pose[2] + 0.07, self.place_pose[3], self.place_pose[4], self.place_pose[5], self.place_pose[6])
             if ik is None:
                 self.get_logger().error('Failed to compute IK for place position, skipping this piece')
                 continue
@@ -140,6 +142,8 @@ class PickAndPlace(Node):
             self.job_queue.extend(current_job_queue)
 
         self.execute_jobs()
+        self.job_queue = []
+        self.currently_picking = False
 
     def execute_jobs(self):
         if not self.job_queue:
