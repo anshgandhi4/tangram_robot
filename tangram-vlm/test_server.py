@@ -4,11 +4,12 @@ from contextlib import AsyncExitStack
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-SERVER_PATH = "/Users/atharva/Code/tangram-vlm/server.py"
+SERVER_PATH = "/Users/athul/Downloads/tangram_robot/tangram_robot/tangram-vlm/server.py"
 EXPECTED_TOOLS = [
     "move_polygon",
     "rotate_polygon",
     "get_observation",
+    "intersections",
 ]
 EXPECTED_TOOLS = sorted(EXPECTED_TOOLS)
 
