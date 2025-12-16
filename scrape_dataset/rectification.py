@@ -76,11 +76,13 @@ def rectify(image, rect_pts, rect_size=(100, 100), center_pos=(100, 100), output
 # Usage
 if __name__ == "__main__":
     for i in range(9, 10):
-        imname1 = f'warped/milk30.jpg'
+        n = '2025-12-04-181003.jpg'
+        imname1 = f'/home/cc/ee106a/fa25/class/ee106a-aek/Pictures/Webcam/{n}'
         
         # Read in the image
         im1 = cv2.imread(imname1)
         im1 = im1[:,:,:3]
+        # im1 = im1.transpose(1,0,2)  # Convert from BGR to RGB
 
 
         # Create ArUco dictionary and detector parameters (4x4 tags)
@@ -122,7 +124,7 @@ if __name__ == "__main__":
             plt.show()
 
             # square = corners  # example detected points
-            rectified, H = rectify(im1, corners, rect_size=(50,50), center_pos=(100, 100), output_size=(im1.shape[1], im1.shape[0]))
+            rectified, H = rectify(im1, corners, rect_size=(50,50), center_pos=(im1.shape[1]//2, im1.shape[0]//2), output_size=(im1.shape[1], im1.shape[0]))
 
             plt.imshow(rectified) # Matplotlib automatically handles RGB/RGBA arrays
             plt.title("Rectified")

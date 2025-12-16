@@ -72,8 +72,8 @@ class IKPlanner(Node):
                 JointConstraint(
                     joint_name=name,
                     position=pos,
-                    tolerance_above=0.01,
-                    tolerance_below=0.01,
+                    tolerance_above=0.001,
+                    tolerance_below=0.001,
                     weight=1.0
                 )
             )

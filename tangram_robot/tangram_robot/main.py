@@ -4,7 +4,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from control_msgs.action import FollowJointTrajectory
-from geometry_msgs.msg import PointStamped
+from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import JointState
 
 from planning.ik import IKPlanner
@@ -13,7 +13,16 @@ class PickAndPlace(Node):
     def __init__(self):
         super().__init__('pick_place')
 
-        self.cube_sub = self.create_subscription(PointStamped, '/transformed_cube_pose', self.cube_callback, 1)
+        self.pick_subs = []
+        for i in range(7):
+            self.pick_subs.append(self.create_subscription(PoseStamped, f'/tangram/pick_{i}_pose', lambda x, i=i: self.pick_callback(x, i), 1))
+
+        self.place_subs = []
+        for i in range(7):
+            self.place_subs.append(self.create_subscription(PoseStamped, f'/tangram/place_{i}_pose', lambda x, i=i: self.place_callback(x, i), 1))
+
+        self.tangrams = [[None, None] for _ in range(7)]
+
         self.joint_state_sub = self.create_subscription(JointState, '/joint_states', self.joint_state_callback, 1)
 
         self.exec_ac = ActionClient(
@@ -23,73 +32,129 @@ class PickAndPlace(Node):
 
         self.gripper_cli = self.create_client(Trigger, '/toggle_gripper')
 
-        self.cube_pose = None
+        self.pick_pose = None
         self.joint_state = None
 
         self.ik_planner = IKPlanner()
 
+        self.currently_picking = False
+        self.create_timer(5, self.pick_place)
+
         # Entries should be of type either JointState or String('toggle_grip')
         self.job_queue = []
+
+        self.get_logger().info('pick and place is gonna start in 5 seconds rip') # REDUCE BY CHANGING THE TIMER
 
     def joint_state_callback(self, msg: JointState):
         self.joint_state = msg
 
-    def cube_callback(self, cube_pose):
-        if self.cube_pose is not None:
+    def pick_callback(self, msg, i):
+        if abs(msg.pose.position.x) > 1 or abs(msg.pose.position.y) > 1 or abs(msg.pose.position.z) > 1:
+            return
+
+        self.tangrams[i][0] = msg.pose
+
+    def place_callback(self, msg, i):
+        if abs(msg.pose.position.x) > 1 or abs(msg.pose.position.y) > 1 or abs(msg.pose.position.z) > 1:
+            return
+
+        self.tangrams[i][1] = msg.pose
+
+    def pick_place(self):
+        self.get_logger().info('attempting to pick place')
+        if self.currently_picking:
+            self.get_logger().info('got rejected')
             return
 
         if self.joint_state is None:
             self.get_logger().info("No joint state yet, cannot proceed")
             return
 
-        self.cube_pose = (cube_pose.point.x, cube_pose.point.y - 0.035, cube_pose.point.z)
+        self.get_logger().info(f'picking')
+        self.currently_picking = True # DO NOT MOVE THIS, WEIRD THINGS HAPPEN IF REMOVED (TREAT THIS AS A LOCK FOR THE JOB QUEUE)
+        # TODO: UNDO THIS
+        for i in range(len(self.tangrams)):
+        # for i in [1]:
+            pick_pose = self.tangrams[i][0]
+            place_pose = self.tangrams[i][1]
 
-        # 1) Move to Pre-Grasp Position (gripper above the cube)
-        '''
-        Use the following offsets for pre-grasp position:
-        x offset: 0.0
-        y offset: -0.035 (Think back to lab 5, why is this needed?)
-        z offset: +0.185 (to be above the cube by accounting for gripper length)
-        '''
+            if pick_pose is None or place_pose is None:
+                self.get_logger().info(f'skipping pick place for {i}')
+                continue
 
-        self.job_queue.append(self.ik_planner.compute_ik(self.joint_state, self.cube_pose[0], self.cube_pose[1], self.cube_pose[2] + 0.185))
+            current_job_queue = []
+            # 315 - 0.005*pick_pose.position.y
 
-        # 2) Move to Grasp Position (lower the gripper to the cube)
-        '''
-        Note that this will again be defined relative to the cube pose.
-        DO NOT CHANGE z offset lower than +0.16. 
-        '''
+            # NOTE: WE FIXED THE Z VALUES TO THE CONSTANT BECAUSE IT ALWAYS WORKS. THE ARUCO DETECTION IS NOISY SO THE Z VALUE DERIVED FROM THAT IS COOKED TOO
+            self.pick_pose = (pick_pose.position.x, pick_pose.position.y, 0.027, pick_pose.orientation.x, pick_pose.orientation.y, pick_pose.orientation.z, pick_pose.orientation.w)
+            self.place_pose = (place_pose.position.x, place_pose.position.y, 0.0325, place_pose.orientation.x, place_pose.orientation.y, place_pose.orientation.z, place_pose.orientation.w)
 
-        self.job_queue.append(self.ik_planner.compute_ik(self.joint_state, self.cube_pose[0], self.cube_pose[1], self.cube_pose[2] + 0.16))
+            self.get_logger().info(f'pick pose: {self.pick_pose[:3]}')
+            self.get_logger().info(f'place pose: {self.place_pose[:3]}')
 
-        # 3) Close the gripper. See job_queue entries defined in init above for how to add this action.
-        self.job_queue.append('toggle_grip')
-        
-        # 4) Move back to Pre-Grasp Position
-        self.job_queue.append(self.ik_planner.compute_ik(self.joint_state, self.cube_pose[0], self.cube_pose[1], self.cube_pose[2] + 0.185))
+            # 1) move to pre-pick position (pick + some z offset)
+            ik = self.ik_planner.compute_ik(self.joint_state, self.pick_pose[0], self.pick_pose[1], self.pick_pose[2] + 0.07, self.pick_pose[3], self.pick_pose[4], self.pick_pose[5], self.pick_pose[6])
+            if ik is None:
+                self.get_logger().error('Failed to compute IK for pick position, skipping this piece')
+                continue
+            current_job_queue.append(ik)
 
-        # 5) Move to release Position
-        '''
-        We want the release position to be 0.4m on the other side of the aruco tag relative to initial cube pose.
-        Which offset will you change to achieve this and in what direction?
-        '''
+            # 2) lower to pick position
+            ik = self.ik_planner.compute_ik(self.joint_state, self.pick_pose[0], self.pick_pose[1], self.pick_pose[2], self.pick_pose[3], self.pick_pose[4], self.pick_pose[5], self.pick_pose[6])
+            if ik is None:
+                self.get_logger().error('Failed to compute IK for pick position, skipping this piece')
+                continue
+            current_job_queue.append(ik)
 
-        self.job_queue.append(self.ik_planner.compute_ik(self.joint_state, -self.cube_pose[0], self.cube_pose[1], self.cube_pose[2] + 0.185))
+            # 3) start suction
+            current_job_queue.append('toggle_grip')
 
-        # 6) Release the gripper
-        self.job_queue.append('toggle_grip')
+            # 4) move back to pre-pick position
+            ik = self.ik_planner.compute_ik(self.joint_state, self.pick_pose[0], self.pick_pose[1], self.pick_pose[2] + 0.07, self.pick_pose[3], self.pick_pose[4], self.pick_pose[5], self.pick_pose[6])
+            if ik is None:
+                self.get_logger().error('Failed to compute IK for pick position, skipping this piece')
+                continue
+            current_job_queue.append(ik)
+
+            # 5) move to pre-place position
+            ik = self.ik_planner.compute_ik(self.joint_state, self.place_pose[0], self.place_pose[1], self.place_pose[2] + 0.07, self.place_pose[3], self.place_pose[4], self.place_pose[5], self.place_pose[6])
+            if ik is None:
+                self.get_logger().error('Failed to compute IK for place position, skipping this piece')
+                continue
+            current_job_queue.append(ik)
+
+            # 6) move to place position
+            ik = self.ik_planner.compute_ik(self.joint_state, self.place_pose[0], self.place_pose[1], self.place_pose[2] + 0.01, self.place_pose[3], self.place_pose[4], self.place_pose[5], self.place_pose[6])
+            if ik is None:
+                self.get_logger().error('Failed to compute IK for place position, skipping this piece')
+                continue
+            current_job_queue.append(ik)
+
+            # 7) stop suction
+            current_job_queue.append('toggle_grip')
+
+            # 8) move back to pre-place position
+            ik = self.ik_planner.compute_ik(self.joint_state, self.place_pose[0], self.place_pose[1], self.place_pose[2] + 0.07, self.place_pose[3], self.place_pose[4], self.place_pose[5], self.place_pose[6])
+            if ik is None:
+                self.get_logger().error('Failed to compute IK for place position, skipping this piece')
+                continue
+            current_job_queue.append(ik)
+
+            self.job_queue.extend(current_job_queue)
 
         self.execute_jobs()
-
+        # self.job_queue = []
+        # self.currently_picking = False
 
     def execute_jobs(self):
         if not self.job_queue:
             self.get_logger().info("All jobs completed.")
-            rclpy.shutdown()
+            self.currently_picking = False
             return
 
         self.get_logger().info(f"Executing job queue, {len(self.job_queue)} jobs remaining.")
         next_job = self.job_queue.pop(0)
+        input('press enter to confirm')
 
         if isinstance(next_job, JointState):
 

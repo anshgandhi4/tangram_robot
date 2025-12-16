@@ -2,37 +2,218 @@ from collections import Counter
 import cv2
 import numpy as np
 from pathlib import Path
-from PIL import Image
-from tqdm import tqdm
 
 from tangram import Piece, Tangram
+from sam3.sam3_client import send_saved_image_for_prediction, decode_masks
 
-def extract_corners_from_image(image_path):
+# TODO: Replace with actual SAM3 server URL
+SAM3_SERVER_URL = "https://lowlily-isolating-daphine.ngrok-free.dev"
+
+def rectify(image, rect_pts, tag_size=100, center_pos=(100, 100), output_size=(500, 500)):
+    pts = np.array(rect_pts[::-1], dtype=np.float32)
+
+    d = tag_size // 2
+    x, y = center_pos
+    dst = np.array([[x - d, y + d],
+                    [x + d, y + d],
+                    [x + d, y - d],
+                    [x - d,  y - d]], dtype=np.float32)
+
+    H, _ = cv2.findHomography(pts, dst, cv2.RANSAC, 3.0)
+    rectified = cv2.warpPerspective(image, H, output_size)
+
+    return rectified, H
+
+def extract_corners_from_image(rgb_image, REAL=True, ROS_PUB=True, DEBUG=False, node=None, prompt=''):
+    if node and node.process_image_lock:
+        return None
+
+    if node:
+        node.process_image_lock = True
+
     NUM_COLORS = 7
-    DEBUG = False
+    CENTER = None
+    ARUCO_RATIO = None # m / pixel
+    SAM = False
 
-    # read image, use PIL to avoid libpng warnings
-    img = cv2.cvtColor(np.array(Image.open(image_path)), cv2.COLOR_BGR2HSV)
+    # read rgb image
+    img = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2HSV)
+    if REAL:
+        # img = cv2.resize(img, (img.shape[1] // 3, img.shape[0] // 3), interpolation=cv2.INTER_AREA)
+        # img = cv2.GaussianBlur(img, (15,15), 0)
+        aruco_img = cv2.cvtColor(img, cv2.COLOR_HSV2BGR)
 
-    # get count of all non-gray colors present in image
-    color_counter = Counter([tuple(pixel) for row in img for pixel in row if pixel[1] != 0])
+        # Create ArUco dictionary and detector parameters (4x4 tags)
+        if int(cv2.__version__.split('.')[1]) >= 7: # 4._.0
+            aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+            aruco_params = cv2.aruco.DetectorParameters()
+        else:
+            aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_5X5_250)
+            aruco_params = cv2.aruco.DetectorParameters_create()
 
-    # get top NUM_COLORS most common colors
-    colors = [np.array(color) for color, _ in color_counter.most_common(NUM_COLORS)]
+        # Generate 3D positions for all of the tags
+        tag_size = 0.10
+        tag_position_mapping = []
+        for t in range(6):
+            horz = (t % 2) * 0.09
+            vert = (t // 2) * 0.07567
+            tag_pos = [(horz,vert,0), (horz + tag_size, vert,0), (horz + tag_size, vert + tag_size,0), (horz, vert+tag_size,0)]
+
+            tag_position_mapping.append(tag_pos)
+
+        # Detect ArUco markers in an image
+        if int(cv2.__version__.split('.')[1]) >= 7: # 4._.0
+            corners, _, _ = cv2.aruco.ArucoDetector(aruco_dict, aruco_params).detectMarkers(aruco_img)
+        else:
+            corners, _, _ = cv2.aruco.detectMarkers(aruco_img, aruco_dict, parameters=aruco_params)
+
+        found_four = False
+        for cont in corners:
+            if len(cont[0]) == 4:
+                corners = [corner for corner in cont[0]]
+                found_four = True
+                break
+
+        if found_four:
+            CENTER = (aruco_img.shape[1]//2, aruco_img.shape[0]//2)
+            TAG_SIZE = 50
+            ARUCO_RATIO = tag_size / TAG_SIZE
+            img, _ = rectify(aruco_img, corners, tag_size=TAG_SIZE, center_pos=CENTER, output_size=(aruco_img.shape[1], aruco_img.shape[0]))
+
+            if ROS_PUB and node is not None:
+                node.rect_pub.publish(node.bridge.cv2_to_imgmsg(img, encoding='bgr8'))
+
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+
+            for corner in corners:
+                cv2.circle(aruco_img, (int(corner[0]), int(corner[1])), 4, (255, 0, 0), -1)
+
+            if DEBUG:
+                cv2.imshow("Detected Corners", aruco_img)
+                cv2.waitKey(0)
+                cv2.destroyAllWindows()
+
+                cv2.imshow("Rectified", img)
+                cv2.waitKey(0)
+                cv2.destroyAllWindows()
+        else:
+            if node:
+                node.process_image_lock = False
+            return None
+
+    # # Interactive HSV threshold sliders
+    # def update_threshold(*args):
+    #     min_h = cv2.getTrackbarPos('Min H', 'HSV Threshold')
+    #     min_s = cv2.getTrackbarPos('Min S', 'HSV Threshold')
+    #     min_v = cv2.getTrackbarPos('Min V', 'HSV Threshold')
+    #     max_h = cv2.getTrackbarPos('Max H', 'HSV Threshold')
+    #     max_s = cv2.getTrackbarPos('Max S', 'HSV Threshold')
+    #     max_v = cv2.getTrackbarPos('Max V', 'HSV Threshold')
+
+    #     lower_bound = np.array([min_h, min_s, min_v])
+    #     upper_bound = np.array([max_h, max_s, max_v])
+    #     print(min_h, min_s, min_v, max_h, max_s, max_v)
+    #     print(f'np.array([{min_h}, {min_s}, {min_v}]), np.array([{max_h}, {max_s}, {max_v}])')
+
+    #     mask = cv2.inRange(img, lower_bound, upper_bound)
+    #     result = cv2.bitwise_and(img, img, mask=mask)
+    #     result_bgr = cv2.cvtColor(result, cv2.COLOR_HSV2BGR)
+
+    #     # Display original, mask, and result side by side
+    #     mask_bgr = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
+    #     img_bgr = cv2.cvtColor(img, cv2.COLOR_HSV2BGR)
+
+    #     # Create a combined display
+    #     h, w = img.shape[:2]
+    #     combined = np.hstack([img_bgr, mask_bgr, result_bgr])
+    #     cv2.imshow('HSV Threshold', combined)
+
+    # # Create window and trackbars
+    # cv2.namedWindow('HSV Threshold', cv2.WINDOW_NORMAL)
+    # cv2.createTrackbar('Min H', 'HSV Threshold', 0, 179, update_threshold)
+    # cv2.createTrackbar('Min S', 'HSV Threshold', 0, 255, update_threshold)
+    # cv2.createTrackbar('Min V', 'HSV Threshold', 0, 255, update_threshold)
+    # cv2.createTrackbar('Max H', 'HSV Threshold', 179, 179, update_threshold)
+    # cv2.createTrackbar('Max S', 'HSV Threshold', 255, 255, update_threshold)
+    # cv2.createTrackbar('Max V', 'HSV Threshold', 255, 255, update_threshold)
+
+    # # Initial display
+    # update_threshold()
+
+    # # Run until user quits (press 'q' or close window)
+    # print("Adjust sliders to control HSV thresholds. Press 'q' to quit.")
+    # while True:
+    #     key = cv2.waitKey(1) & 0xFF
+    #     if key == ord('q') or cv2.getWindowProperty('HSV Threshold', cv2.WND_PROP_VISIBLE) < 1:
+    #         break
+
+    # cv2.destroyAllWindows()
+
+    if REAL:
+        colors = [(np.array([105, 183, 126]), np.array([115, 255, 255]), 'blue', 'smaller navy blue triangle'),
+                  (np.array([98, 213, 163]),  np.array([104, 255, 211]), 'light blue', 'larger light blue triangle'),
+                  (np.array([71, 143, 0]),    np.array([99, 255, 171]),  'green', 'green triangle'),
+                  (np.array([21, 71, 72]),    np.array([32, 255, 255]),  'yellow', 'yellow triangle'),
+                  (np.array([89, 97, 163]),   np.array([119, 152, 224]), 'purple', 'light purple square'),
+                  (np.array([154, 148, 164]), np.array([173, 197, 255]), 'hot pink', 'hot pink parallelogram'),
+                  ((np.array([0, 134, 151]), np.array([172, 129, 132])), (np.array([3, 201, 173]), np.array([179, 255, 198])), 'red', 'small scarlet triangle')]
+    else:
+        # get count of all non-gray colors present in image
+        color_counter = Counter([tuple(pixel) for row in img for pixel in row if pixel[1] != 0])
+
+        # get top NUM_COLORS most common colors
+        colors = [(np.array(color), np.array(color), '', '') for color, _ in color_counter.most_common(NUM_COLORS)]
+
+    tangram = Tangram(prompt=prompt)
+
+    # save image for SAM3 segmentation
+    sam3_image_path = str(Path(__file__).parent / 'tangram_input.jpg')
+    cv2.imwrite(sam3_image_path, cv2.cvtColor(img, cv2.COLOR_HSV2BGR))
 
     # get corners for tangram shape corresponding to each color
-    tangram = Tangram(prompt=str(image_path).split('tangram-')[1].split('-solution')[0].replace('-', ' '))
-    for color in colors:
+    masks = []
+    for lower, upper, color_name, color_name_sam3 in colors:
+        # node.get_logger().info(f'processing {color_name}')
         # generate image mask
-        mask = np.all(img == color, axis=-1).astype(np.uint8) * 255
+        if REAL:
+            # Use SAM3 for segmentation
+            if SAM:
+                try:
+                    result = send_saved_image_for_prediction(SAM3_SERVER_URL, sam3_image_path, color_name_sam3)
+                    sam3_masks = decode_masks(result)
+                    if sam3_masks:
+                        # Use the first (highest confidence) mask, convert to uint8
+                        mask = (sam3_masks[0] > 127).astype(np.uint8) * 255
+                    else:
+                        # No mask found for this color
+                        mask = np.zeros(img.shape[:2], dtype=np.uint8)
+                except:
+                    node.get_logger().error('Error communicating with SAM3 server')
+                    node.process_image_lock = False
+                    return
+            else:
+                if color_name == 'red':
+                    mask = cv2.inRange(img, lower[0], upper[0])
+                    mask2 = cv2.inRange(img, lower[1], upper[1])
+                    mask = cv2.bitwise_or(mask, mask2)
+                else:
+                    mask = cv2.inRange(img, lower, upper)
+
+                mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, (25, 25))
+        else:
+            mask = np.all(img == lower, axis=-1).astype(np.uint8) * 255
+        masks.append(mask)
 
         # extract contours from mask
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         # get largest contour
         contour = None
+        max_area = 0
         for c in contours:
-            # process contour to remove duplicate points
+            area = cv2.contourArea(c)
+
+            # process contour to remove redundant points
             c = cv2.convexHull(c)
 
             # approximate polygon based on contour
@@ -40,32 +221,92 @@ def extract_corners_from_image(image_path):
             epsilon = 0.02 * cv2.arcLength(c, True)
             corners = cv2.approxPolyDP(c, epsilon, True).reshape(-1, 2)
 
+            if REAL and DEBUG:
+                contour_img = img.copy()
+                cv2.drawContours(contour_img, c, -1, (50, 255, 255), 3)
+                cv2.imshow(f'{color_name} Contour Image', cv2.cvtColor(contour_img, cv2.COLOR_HSV2BGR))
+                cv2.waitKey(0)
+                cv2.destroyAllWindows()
+
             if len(corners) in [3, 4]:
-                contour = corners
-                break
+                if area > max_area:
+                    contour = corners
+                    max_area = area
+                    if not REAL:
+                        break
 
         # add piece to tangram
-        tangram.add_piece(Piece(contour, color))
+        if contour is not None:
+            tangram.add_piece(Piece(contour, color_name if REAL else lower))
+
+        if DEBUG:
+            # display mask
+            mask_display = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
+            cv2.imshow(f'{color_name} Mask', mask_display)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+
+            # display masked image
+            masked_image = cv2.bitwise_and(img, img, mask=mask)
+            masked_image = cv2.cvtColor(masked_image, cv2.COLOR_HSV2BGR)
+            cv2.imshow(f'{color_name} Masked Image', masked_image)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+
+            # display image with marked corners
+            if contour is not None:
+                corner_image = img.copy()
+                for corner in contour:
+                    cv2.circle(corner_image, tuple(corner), 4, (0, 255, 255), -1)
+
+                cv2.imshow(f'{color_name} Corner Image', cv2.cvtColor(corner_image, cv2.COLOR_HSV2BGR))
+                cv2.waitKey(0)
+                cv2.destroyAllWindows()
+
+    master_mask = masks[0]
+    for mask in masks[1:]:
+        master_mask = cv2.bitwise_or(master_mask, mask)
+
+    # convert poses from pixels to meters if possible
+    if REAL and CENTER is not None and ARUCO_RATIO is not None:
+        for piece in tangram.pieces:
+            piece.coords = piece.coords.astype(np.float32)
+            for coord in piece.coords:
+                coord[0] = float(coord[0] - CENTER[0]) * ARUCO_RATIO
+                coord[1] = float(CENTER[1] - coord[1]) * ARUCO_RATIO
+            piece.meters = True
 
     # process tangram
-    flip = tangram.process(img.shape[1])
+    flip = tangram.process(img.shape[1], enable_flip=True)
     if DEBUG and flip:
         img = np.ascontiguousarray(np.flip(img, axis=1))
 
-    if DEBUG:
+    if DEBUG or (ROS_PUB and node is not None):
         for piece in tangram.pieces:
             center = (int(piece.pose[0]), int(piece.pose[1]))
-            cv2.circle(img, center, 4, (0, 255, 255), -1)
+            cv2.circle(img, center, 4, (12, 255, 255), -1)
 
-            box = cv2.boxPoints((center, (32, 4), np.degrees(piece.pose[2]))).astype(np.int32)
-            cv2.fillPoly(img, [box], (0, 255, 255))
+            box = cv2.boxPoints((center, (32, 2), np.degrees(piece.pose[2]))).astype(np.int32)
+            cv2.fillPoly(img, [box], (12, 255, 255))
 
-        cv2.imshow('Output Image', cv2.cvtColor(img, cv2.COLOR_HSV2BGR))
+        img = cv2.cvtColor(img, cv2.COLOR_HSV2BGR)
+
+    if DEBUG:
+        cv2.imshow('Output Image', img)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
+    if ROS_PUB and node is not None:
+        node.masked_pub.publish(node.bridge.cv2_to_imgmsg(cv2.cvtColor(master_mask, cv2.COLOR_GRAY2BGR), encoding='bgr8'))
+        node.output_pub.publish(node.bridge.cv2_to_imgmsg(img, encoding='bgr8'))
+
+    if node:
+        node.process_image_lock = False
     return tangram
 
 if __name__ == '__main__':
+    from PIL import Image
+    from tqdm import tqdm
     for image_path in tqdm(sorted(list((Path(__file__).parent / 'tangrams').iterdir()))):
-        extract_corners_from_image(image_path)
+        prompt = str(image_path).split('tangram-')[1].split('-solution')[0].replace('-', ' ')
+        extract_corners_from_image(np.array(Image.open(image_path)), REAL=False, ROS_PUB=False, DEBUG=True, prompt=prompt)
